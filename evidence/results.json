@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "runner": "Sol",
+  "checks": [
+    "original 3D title",
+    "new game",
+    "cursor/card/turn input",
+    "PNG snapshots",
+    "clean quit"
+  ],
+  "build": "native compiler + Sol ELF/QAR2 packager; no Make/Python"
+}
