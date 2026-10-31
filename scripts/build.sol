@@ -44,4 +44,9 @@ build u =
   _ = E.exports "build/first.elf" "build/exports.s";
   _ = C.command (flags + ["build/exports.s","-Wl,--defsym=QOS_SLOT_BASE=0","-o","build/app.elf"]);
   _ = C.command (flags + ["build/exports.s","-Wl,--defsym=QOS_SLOT_BASE=0x10000000","-o","build/moved.elf"]);
-  E.archive "terra-ii" (string "abi" meta) "build/app.elf" "build/moved.elf" "build/terra-ii.qa".
+  _ = E.archive "terra-ii" (string "abi" meta) "build/app.elf" "build/moved.elf" "build/terra-ii.qa";
+  # Restore the installed language home before launching Sol test scripts.
+  _ = C.need (Env.set "FPR_HOME" home);
+  _ = C.need (Env.set "FPR_PATH" home);
+  _ = C.need (Env.unset "FPR_FOREIGN");
+  Unit.
