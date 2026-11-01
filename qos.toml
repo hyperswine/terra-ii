@@ -1,0 +1,22 @@
+manifest = 2
+
+[app]
+id = "terra-ii"
+name = "Terra II"
+version = "1.0.0"
+kind = "app"
+
+[build]
+entry = "src/terra2.fpr"
+target = "qos-portable"
+# The default optimisation pipeline needs too much memory for this game.
+# checks-only keeps every type, safety and linearity check.
+optimize = "checks-only"
+compiler-memory-mb = 2048
+
+[run]
+display = "gl"
+disk-mb = 32
+
+[sdk]
+version = "0.3.0"

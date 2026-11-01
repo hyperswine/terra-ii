@@ -19,5 +19,5 @@ testGame u =
   _ = G.waitExit job 200;
   C.report "evidence/results.json" (J.JObj [("passed",J.JBool True),("runner",J.JStr "Sol"),
     ("checks",J.JArr (List.map J.JStr ["original 3D title","new game","cursor/card/turn input","PNG snapshots","clean quit"])),
-    ("build",J.JStr "native compiler + Sol ELF/QAR2 packager; no Make/Python")]).
+    ("build",J.JStr "qos build and qos run (QOS Portable SDK, qos.toml v2)")]).
 > testGame Unit.

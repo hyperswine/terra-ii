@@ -4,21 +4,19 @@ The original Terra II positional card game in a standalone 3D QOS Portable windo
 
 ## Install and run
 
-Tested with Homebrew FP-RISC 0.12.0 and QOS Portable 0.2.0 on macOS ARM64.
+Needs QOS Portable 0.3.0 or later (`[sdk] version` in `qos.toml`), which adds `kind = "app"` projects to `qos build` and `qos run`. 0.3.0 is not released yet; until it is, put a staged SDK's `bin/` first on `PATH`. Tested on macOS ARM64.
 
 ```sh
-brew install hyperswine/tap/fprisc hyperswine/tap/qos-portable
+brew install hyperswine/tap/fprisc hyperswine/tap/qos-portable  # fprisc provides sol
 git clone https://github.com/hyperswine/terra-ii.git
 cd terra-ii
-sol project.sol build
-sol project.sol run
+qos build
+qos run
 ```
 
 Enter starts/continues a game. Arrow keys move the cursor; Enter picks/confirms; Space or E ends the turn. A attacks, O overwatches, R retreats, V advances, C charges and F fires artillery. Escape cancels/pauses; P captures a frame; Q quits.
 
 The upstream V1 rules and existing exclusions are retained. This extraction does not add card texts, the Unsupplied rule, RECALL, requisition or a mulligan.
-
-FP-RISC 0.12.0's default optimization pipeline consumes excessive memory on this large game. The Sol build bounds the compiler heap to 2 GiB and disables optional specialization, inlining, reuse, vector and automatic region optimizations. Type, safety and linearity checks remain enabled.
 
 ## Test
 
@@ -34,11 +32,11 @@ Builds can take several minutes for the larger applications. Build/test commands
 
 ## Build tools
 
-All project orchestration and test scripts are **Sol**. There are no Makefiles, Python or Node scripts.
+`qos.toml` (manifest 2, `kind = "app"`) describes the game. `qos build` compiles it with the SDK's own compiler, prelude and modules, links the SDK's private app-side platform files and the FP-RISC runtime that matches that compiler, checks a second link displaced by 256 MiB, and writes `build/terra-ii.qa`. `qos run` creates `data/terra-ii.disk` if needed and starts the SDK's `qosp-gl`. The project carries no copy of QOS's platform code and no build scripts; `sol project.sol build | run | test` only sequences those commands and the Sol test harness.
 
-The game is compiled with the installed `fpr`, linked by LLVM Clang/lld, and run by the installed native `qosp-gl`. The Sol ELF64/QAR2 packager constructs the runtime export table, validates AArch64 relocation types, checks a second link displaced by 256 MiB, hashes the image/relocations, and writes the archive. It invokes no `qos.py`, Python, Make, objcopy or readelf. Only the small pinned QOS app-side C ABI bridge is vendored; compiler/runtime/standard-library files come from the installed packages.
+This game is large, so `qos.toml` sets `optimize = "checks-only"` and `compiler-memory-mb = 2048`: the compiler's heap is bounded at 2 GiB and its optional specialisation, inlining, reuse, vector and receive-turn optimisations are off. Type, safety and linearity checks stay on. The built archive records both settings.
 
-The Homebrew `qos-portable` formula itself still declares Python for its SDK CLI, but this project does not execute that CLI. Native compilation still requires Clang/lld and the platform toolchain. Standard filesystem utilities and a shell are used for directory/FIFO creation and descriptor plumbing; macOS `sips` exports test PNGs.
+The SDK's `qos` command needs Python 3.11+, Clang and lld. macOS `sips` exports test PNGs; a shell and standard utilities provide FIFO and descriptor plumbing for the tests.
 
 ## Source and license
 
