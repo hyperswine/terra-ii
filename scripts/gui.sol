@@ -1,6 +1,7 @@
 C = use "common".
 P = use "sol/lib/proc".
 J = use "sol/lib/json".
+
 event code value = C.need (Bytes.fromList (List.map (fn n -> 0) (List.range 1 16) +
   [1,0,code%256,Num.floor (code/256.0),value,0,0,0])).
 key fifo code =
@@ -39,6 +40,7 @@ shot tag fifo n label =
   _ = C.need (Fs.renameNow source "evidence/{label}.ppm" True);
   _ = C.command ["/usr/bin/sips","-s","format","png","evidence/{label}.ppm","--out","evidence/{label}.png"];
   b.
+
 waitExit : ProcessJob -> (tries : Int | measure tries) -> Unit .
 waitExit job tries =
   (result,next) = Proc.poll job;
@@ -47,6 +49,7 @@ waitExit job tries =
     C.check "game exited unsuccessfully: {code}/{codes}/{errors}" (code == 0)
   else if tries <= 0 then _ = C.need (Proc.cancel next); error "game did not shut down"
   else _ = sleepMs 100; waitExit next (tries - 1).
+
 start id =
   root = C.need (IO.cwd Unit);
   scratch = tempDir "{id}-gui";

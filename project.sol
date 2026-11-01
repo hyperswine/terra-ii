@@ -1,6 +1,9 @@
 #!/usr/bin/env sol
+
 unsafe program.
+
 C = use "scripts/common".
+
 # qos build / qos run (QOS Portable SDK, qos.toml) own compiling, linking,
 # packaging and launching; this script only sequences them.
 > case args Unit of

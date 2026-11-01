@@ -37,6 +37,7 @@
 #   sol project.sol run
 #   sol project.sol test   (Sol drives scripted input and frame captures)
 # ============================================================================
+
 #: host gl
 #: expect game over
 #: music ../models/music/Skyward_Little_World.mp3
@@ -67,8 +68,7 @@ EResize = MV.EResize.
 STick = MV.STick.
 SKeys = MV.SKeys.
 
-Gfx = Type (Scene statics dynamics lights camera
-          | Ent mesh pos yaw scale color).
+Gfx = Type (Scene statics dynamics lights camera | Ent mesh pos yaw scale color).
 
 # the 2D layer's view AST (mods/scene2d): boxes and labels laid out like
 # a miniature flexbox, emitted as flat cubes, discs and text entities in
@@ -2074,6 +2074,7 @@ run hub tag app =
   result = MV.game me cfg app;
   _ = EP.close me ep;
   result.
+
 main =
   hub = Services.withGraphics Services.boot 960 600;
   run hub "terra2" (App init update subs view).
