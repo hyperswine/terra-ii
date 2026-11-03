@@ -8,6 +8,7 @@ unsafe module.
 # danger red for what can be hit.  The 3D pass fogs toward `sky` and is
 # lit by `ambient` (cool) plus the warm sun; the 2D layer's ink and
 # paper are the last group.
+
 white = (1000, 1000, 1000).
 yellow = (1000, 860, 300).           # the accent (amber)
 danger = (960, 360, 300).
@@ -21,12 +22,16 @@ blue = (270, 440, 860).
 blueLight = (520, 640, 940).
 red = (860, 330, 290).
 redLight = (960, 560, 500).
+
 sideCol 0 = blue.
 sideCol s = red.
+
 sideLight 0 = blueLight.
 sideLight s = redLight.
+
 hqCol 0 = (400, 480, 660).
 hqCol s = (660, 420, 400).
+
 dark = (95, 100, 125).
 khaki = (690, 630, 430).
 shadow = (95, 110, 120).
@@ -39,6 +44,7 @@ inkDim = (600, 630, 700).
 paper = (34, 40, 56).
 paperLit = (62, 74, 108).
 edge = (330, 370, 440).
+
 # the 2D layer's surfaces: glass (translucent, over the board), chips, bands
 glass = (12, 16, 26, 800).
 glassLit = (34, 44, 66, 860).
@@ -49,5 +55,6 @@ bandInf = (58, 96, 156).
 bandArm = (92, 88, 120).
 bandArt = (150, 84, 58).
 bandSup = (40, 118, 96).
+
 supCol 0 = (330, 640, 520).
 supCol s = (760, 560, 300).

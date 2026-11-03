@@ -47,17 +47,20 @@ scene m =
   es7 = numEnts m.nums es6;
   es8 = veil m es7;
   Scene Nil es8 lights (cameraOf m).
+
 # where a unit fell: a dark ellipse that fades over twenty seconds
 markEnts Nil es = es.
 markEnts ((x, z, t) :: r) es =
   a = 520 - t * 520 / 20000;
   markEnts r (Ent "sphere" (x, 64, z) 0 (1900, 24, 1500) (40, 35, 35, a) :: es).
+
 # the enemy's turn under a veil: a translucent dark sheet over the board,
 # fading in and out over 400 ms, so their moves read as theirs
 veil m es | m.turn == 0 and m.vt == 0 = es.
 veil m es =
   a = 330 * m.vt / 400;
   Ent "plane" (0, 5200, 0) 0 (20000, 1000, 20000) (20, 20, 40, a) :: es.
+
 # floating damage numbers: white on a dark badge, in front of the target,
 # rising and shrinking over 750 ms
 numEnts Nil es = es.
@@ -70,6 +73,7 @@ numEnts ((x, z, s, t) :: r) es =
   a = 1000 - Mo.easeIn k;
   es1 = Ent "cube" (x, y - 43 * cell / 10, zz - 60) 0 (w, 8 * cell, 60) (60, 30, 30, a * 85 / 100) :: es;
   numEnts r (txtC es1 s x (y + cell / 2) zz cell (1000, 980, 900, a)).
+
 # the camera, knocked about while shake > 0 (a hash of the clock, not a
 # random stream: a replayed game shakes the same way)
 cameraOf m | m.title == 1 =

@@ -27,17 +27,22 @@ show m scr = { m | back = m.screen, screen = scr }.
 goBack m = { m | screen = m.back }.
 
 # ---- the model --------------------------------------------------------------------
+
 # sel: SNone | SCard i | SPlace i z | SUnit z c | STarget z c (the attacker)
 # zone: the cursor's zone (0 hand, 1 my fwd, 2 my rear; under STarget 1 enemy
 # fwd, 2 enemy rear, 3 enemy HQ), cur: its index.
-
 Sel = Type (SNone | SCard i | SPlace i z | SUnit z c | STarget z c).
+
 # actions, queued and played one at a time
 Act = Type (ACall s i z c | AAttack s z c tz tc | AOver s c | ARetreat s c
           | AAdvance s c | ACharge s c | AFire s c tz tc | AEnd s | AStart s | ABeat).
+
 # the animation in flight: kind 0 none, 1 lunge, 2 shot, 3 slide, 4 pause
 An = Type (An kind s fz fc tz tc t done).
+
+# no animation in flight
 noAn = An 0 0 0 0 0 0 0 0.
+
 # how long each animation runs, ms: 1 lunge, 2 shot, 3 slide, 5 summon (4 is
 # the pause, whose length the queue carries)
 durOf 1 = 520.
@@ -65,13 +70,17 @@ initWith s0 s1 =
     screen = scrTitle, back = scrTitle, menu = 0, confirm = 0, ccur = (0, 0),
     prof = profEmpty, fsOn = 0, recs = Nil, called = 0, lostU = 0, kills = 0, dmg = 0,
     cont = 0, dirty = 0, hs = 0, ss = 0, tin = "", tout = Nil }.
+
 initModel = initWith 8675309 4242.
+
 # what the Stats screen starts from before the disk is read
 profEmpty = { played = 0, won = 0, lost = 0, gone = 0, rounds = 0, best = 0, calls = 0, losses = 0, recent = Nil }.
 note m s = { m | msg = s, log = s :: m.log }.
+
 # a sound cue: queued on the model, played by the tick (like the log)
 cue m r = { m | sfx = r :: m.sfx }.
 oops m s = cue (note m s) Sfx.refuse.
+
 # a floating number over a spot on the table
 number m pos s = (x, y, z) = pos; { m | nums = (x, z, s, 0) :: m.nums }.
 
@@ -79,4 +88,3 @@ sideName 0 = "you".
 sideName s = "enemy".
 zoneName 1 = "forward".
 zoneName z = "rear".
-

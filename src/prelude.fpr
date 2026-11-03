@@ -7,23 +7,29 @@ nth : (l : List a | measure l) -> Int -> a -> a .
 nth l i d = case l of
     Nil -> d
   | x :: r -> case i == 0 of True -> x | False -> nth r (i - 1) d.
+
 setAt : (l : List a | measure l) -> Int -> a -> List a .
 setAt l i v = case l of
     Nil -> Nil
   | x :: r -> case i == 0 of True -> v :: r | False -> x :: setAt r (i - 1) v.
+
 delAt : (l : List a | measure l) -> Int -> List a .
 delAt l i = case l of
     Nil -> Nil
   | x :: r -> case i == 0 of True -> r | False -> x :: delAt r (i - 1).
+
 rev l acc = l |> List.fold (fn x xs -> x :: xs) acc.
+
 takeAt : (l : List a | measure l) -> Int -> (a, List a) .
 takeAt l k = case l of
     Nil -> error "takeAt: index outside list"
   | x :: r -> case k == 0 of
       True -> (x, r)
     | False -> (y, rest) = takeAt r (k - 1); (y, x :: rest).
+
 bi True = 1.
 bi False = 0.
+
 rnd s = (s * 1103515245 + 12345) % 2147483648.
 
 split l 0 acc = (rev acc Nil, l).
