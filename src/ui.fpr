@@ -1,0 +1,373 @@
+# ---- the 2D layer: scene2d over the board ------------------------------------------------
+# A 960 x 600 virtual screen: status bar, unit panel, banner, hand, and the menu screens.
+
+unsafe module.
+
+Pr = use "prelude".
+Mo = use "motion".
+Cd = use "cards".
+Bd = use "board".
+Pl = use "palette".
+Md = use "model".
+S2 = use "mods/scene2d".
+
+Box = S2.Box.
+Lbl = S2.Lbl.
+Row = S2.Row.
+Col = S2.Col.
+Pad = S2.Pad.
+Gap = S2.Gap.
+W = S2.W.
+H = S2.H.
+Grow = S2.Grow.
+Bg = S2.Bg.
+Fg = S2.Fg.
+Bord = S2.Bord.
+Fs = S2.Fs.
+Round = S2.Round.
+Shadow = S2.Shadow.
+Bga = S2.Bga.
+Center = S2.Center.
+Mid = S2.Mid.
+Clip = S2.Clip.
+Scroll = S2.Scroll.
+Ellip = S2.Ellip.
+
+# the key table: one source for the Keys screen and the panel's key caps
+# (group 1 cursor, 2 unit actions, 3 the game)
+keymap =
+  [(1, "arrows", "move the cursor"), (1, "1-5", "jump to a column"),
+   (1, "enter", "pick / confirm"), (1, "esc", "cancel, or pause"),
+   (2, "A", "attack"), (2, "O", "overwatch"), (2, "R", "retreat"),
+   (2, "V", "advance"), (2, "C", "charge (artillery)"), (2, "F", "fire (artillery)"),
+   (3, "space", "end the turn"), (3, "M", "music on / off"), (3, "K", "keys"),
+   (3, "S", "stats"), (3, "C", "cards"), (3, "T", "terminal"),
+   (3, "P / F1", "screenshot"), (3, "Q", "quit")].
+
+# ---- the 2D UI: scene2d over the board -------------------------------------------------
+# A 480 x 300 virtual screen (the 960 x 600 window at an integer 2x, so
+# every glyph cell is exactly 2 x 2 real pixels): a status bar and the
+# message at the top, a unit panel at the right, the banner in the middle,
+# the hand along the bottom as cards facing the viewer -- rebuilt from the
+# model every frame and drawn by the walker's second pass, in front of
+# everything, with the depth cleared.  Every box has a rectangle in this
+# space, which is what a mouse will hit-test against later: no raycasting.
+
+uiW = 960.
+uiH = 600.
+ui m =
+  (ents, slots) = S2.buildW (uiW, uiH) (uiTree m);
+  all = case m.screen == Md.scrPause of True -> ents + pauseEnts m | False -> ents;
+  (all, S2.camAt uiH).
+
+grow = Box [Grow] Nil.
+spacer h = Box [H h, W 1] Nil.
+# text in the proportional face at em px
+lbl em col s = Lbl [Fs em, Fg col] s.
+# text capped at w px, cut with ".." when longer
+tE em col w s = Lbl [Fs em, Fg col, Ellip w] s.
+centred kid = Box [Row, Center] [kid].
+# a rounded chip with a word in it
+tag bg fg s = Box [Row, Pad 5, Round 9, Bg bg, Mid] [lbl 12 fg s].
+# a small caption over a figure
+stat cap col v =
+  Box [Row, Gap 5, Mid] [lbl 10 Pl.inkDim cap, lbl 15 col v].
+# a key cap and what it does
+keyLine k what = keyLineW 26 k what.
+keyLineW w k what =
+  Box [Row, Gap 7, Mid]
+      (Box [Row, W w, Pad 3, Round 5, Bg Pl.chip, Center, Mid] [lbl 11 Pl.ink k] ::
+       [lbl 12 Pl.inkDim what]).
+
+uiTree m | m.screen == Md.scrTerm = termTree m.
+uiTree m | m.screen == Md.scrCards = cardsTree m.
+uiTree m | m.screen == Md.scrKeys = keysTree m.
+uiTree m | m.screen == Md.scrStats = statsTree m.
+uiTree m | m.title == 1 = titleTree m.
+uiTree m =
+  Box [Col, W uiW, H uiH]
+      [topBar m, msgLine m, middle m, handBar m].
+# the title: a glass card over the drifting board, the prompt blinking
+titleTree m =
+  blink = case Mo.tri 1200 m.ms > 0 of True -> Pl.ink | False -> Pl.inkDim;
+  logo = Box [Col, Pad 30, Gap 10, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
+             (centred (lbl 64 Pl.yellow "TERRA II") ::
+              centred (lbl 14 Pl.inkDim "a positional card game  |  Republic VI against the Southern Empire") ::
+              spacer 10 ::
+              centred (lbl 20 blink (case m.cont == 1 of True -> "ENTER  continue turn {m.tno}      N  new game" | False -> "press ENTER")) ::
+              spacer 4 ::
+              [centred (lbl 12 Pl.inkDim "C  cards      K  keys      S  stats      M  music      Q  quit")]);
+  Box [Col, W uiW, H uiH]
+      [grow, centred logo, grow, centred (lbl 12 Pl.inkDim "FP-RISC on QOS Portable"), spacer 14].
+
+# the pause menu, over the game's own layer (a deeper depth so it wins)
+pauseEnts m =
+  (es, sl) = S2.buildAt (uiW, uiH) (pauseTree m) 40;
+  es.
+pauseTree m =
+  card = case m.confirm == 1 of
+    True -> menuCard "RESTART?"
+              (centred (lbl 14 Pl.ink "Abandon this game and deal a new one?") :: spacer 6 ::
+               [centred (lbl 12 Pl.inkDim "enter  yes      esc  no")])
+  | False -> menuCard "PAUSED"
+              (menuItems m 0 ["Resume", "Restart", "Cards", "Stats", "Keys", "Quit"] +
+               [spacer 4, centred (lbl 12 Pl.inkDim "arrows  enter      esc  resume")]);
+  Box [Col, W uiW, H uiH, Center, Mid, Bga (0, 0, 0, 520)] [card].
+menuCard title kids =
+  Box [Col, W 340, Pad 20, Gap 8, Round 16, Shadow, Bga Pl.glass, Bord Pl.yellow]
+      (centred (lbl 26 Pl.yellow title) :: spacer 6 :: kids).
+menuItems m i Nil = Nil.
+menuItems m i (s :: r) = menuItem (m.menu == i) s :: menuItems m (i + 1) r.
+menuItem True s = Box [Row, Pad 8, Round 8, Bg Pl.chip, Bord Pl.yellow, Center] [lbl 15 Pl.ink s].
+menuItem False s = Box [Row, Pad 8, Round 8, Center] [lbl 15 Pl.inkDim s].
+
+# the Cards screen: both factions as small cards, the cursor's in detail
+cardsTree m =
+  (fac, i) = m.ccur;
+  cd = Cd.cardOf (Pr.nth (Cd.facIds fac) i 0);
+  card = Box [Col, W 920, Pad 18, Gap 8, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
+             (Box [Row, Mid] [lbl 30 Pl.yellow "CARDS", grow, lbl 12 Pl.inkDim "arrows  browse      esc  back"] ::
+              lbl 11 Pl.blueLight "REPUBLIC VI" ::
+              gridOf (Cd.facIds 0) (case fac == 0 of True -> i | False -> 0 - 1) ::
+              lbl 11 Pl.redLight "SOUTHERN EMPIRE" ::
+              gridOf (Cd.facIds 1) (case fac == 1 of True -> i | False -> 0 - 1) ::
+              [Box [Row, Pad 8, Round 8, Bg Pl.chip, Mid, Gap 16] (detailOf cd)]);
+  Box [Col, W uiW, H uiH, Center, Mid] [card].
+gridOf ids seli =
+  Box [Col, Gap 6]
+      (Box [Row, Gap 6] (minis (List.take ids 8) 0 seli) ::
+       [Box [Row, Gap 6] (minis (List.drop ids 8) 8 seli)]).
+minis Nil i seli = Nil.
+minis (k :: r) i seli = mini (Cd.cardOf k) (i == seli) :: minis r (i + 1) seli.
+mini cd sel =
+  face = case sel of True -> Pl.paperLit | False -> Pl.paper;
+  rim = case sel of True -> Pl.yellow | False -> Pl.edge;
+  Box [Col, W 104, H 80, Pad 4, Gap 3, Round 8, Bg face, Bord rim]
+      (Box [Row, H 26, Pad 4, Round 6, Bg (bandOf cd), Mid, Gap 3]
+           [tE 11 Pl.white 62 (Cd.cName cd), grow, costBadge True (Cd.cCost cd)] ::
+       Box [Row, Grow, Center, Mid] [lbl 9 Pl.inkDim (kindName cd)] ::
+       [Box [Row, Mid, Pad 2] (miniStats cd)]).
+miniStats cd | Cd.cKind cd == 1 = [lbl 14 Pl.yellow "+{Cd.cGen cd}", grow, lbl 14 Pl.ink "{Cd.cDef cd}"].
+miniStats cd = [lbl 14 Pl.ink "{Cd.cAtk cd}", grow, lbl 14 Pl.ink "{Cd.cDef cd}"].
+detailOf cd =
+  lbl 15 Pl.white (Cd.cName cd) :: lbl 12 Pl.inkDim (kindName cd) :: lbl 12 Pl.ink "cost {Cd.cCost cd}" ::
+  [statsText cd, lbl 12 Pl.ink "drain {Cd.cDrain cd}", tE 12 Pl.inkDim 330 (kindText cd)].
+statsText cd | Cd.cKind cd == 1 = lbl 12 Pl.ink "GEN +{Cd.cGen cd}   DEF {Cd.cDef cd}".
+statsText cd = lbl 12 Pl.ink "ATK {Cd.cAtk cd}   DEF {Cd.cDef cd}".
+kindText cd | Cd.cKind cd == 1 = "a rear unit: earns supply every turn".
+kindText cd | Cd.cKind cd == 2 = "charges, then fires past cover".
+kindText cd | Cd.cSoft cd == 1 = "soft: the ENV track bites it".
+kindText cd = "hard: shrugs off ENV, drains supply".
+
+# the terminal: the transcript of the session so far, the line being typed
+termTree m =
+  caret = case Mo.tri 500 m.ms > 0 of True -> "_" | False -> " ";
+  card = Box [Col, W 760, Pad 20, Gap 10, Round 16, Shadow, Bga Pl.glass, Bord Pl.yellow]
+             (Box [Row, Mid] [lbl 26 Pl.yellow "TERMINAL", grow,
+                              lbl 12 Pl.inkDim "the model, live -- help lists the commands, esc closes"] ::
+              Box [Col, Gap 3, H 300, Clip] (Pr.rev m.tout Nil |> List.map (fn l -> tE 13 Pl.ink 720 l)) ::
+              [Box [Row, Pad 8, Round 8, Bg Pl.chip] [tE 15 Pl.white 720 ("> " + m.tin + caret)]]);
+  Box [Col, W uiW, H uiH, Center, Mid] [card].
+
+# the Keys screen: the key table in three columns
+keysTree m =
+  card = Box [Col, W 780, Pad 24, Gap 16, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
+             (lbl 30 Pl.yellow "KEYS" ::
+              Box [Row, Gap 28] [keyGroup 1 "CURSOR", keyGroup 2 "UNIT ACTIONS", keyGroup 3 "GAME"] ::
+              [centred (lbl 12 Pl.inkDim "esc  back")]);
+  Box [Col, W uiW, H uiH, Center, Mid] [card].
+keyGroup g name = Box [Col, Grow, Gap 7] (lbl 11 Pl.inkDim name :: keyRows (ofGroup g keymap)).
+keyRows Nil = Nil.
+keyRows ((g, k, what) :: r) = keyLineW 62 k what :: keyRows r.
+ofGroup g Nil = Nil.
+ofGroup g ((gg, k, w) :: r) | gg == g = (gg, k, w) :: ofGroup g r.
+ofGroup g (e :: r) = ofGroup g r.
+
+# the Stats screen: the profile's totals and its recent games
+statsTree m =
+  p = m.prof;
+  fin = p.won + p.lost;
+  winRate = case fin > 0 of True -> p.won * 100 / fin | False -> 0;
+  avg = case fin > 0 of True -> p.rounds / fin | False -> 0;
+  saved = case m.fsOn == 1 of True -> "kept on the disk" | False -> "no disk: this session is not kept";
+  card = Box [Col, W 760, Pad 24, Gap 12, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
+             (Box [Row, Mid] [lbl 30 Pl.yellow "STATS", grow, lbl 12 Pl.inkDim saved] ::
+              Box [Row, Gap 10]
+                  (chipOf "PLAYED" "{p.played}" :: chipOf "WON" "{p.won}" :: chipOf "LOST" "{p.lost}" ::
+                   [chipOf "ABANDONED" "{p.gone}", chipOf "WIN RATE" "{winRate}%"]) ::
+              Box [Row, Gap 10]
+                  (chipOf "BEST WIN" (bestStr p.best) :: chipOf "AVG ROUNDS" "{avg}" ::
+                   [chipOf "UNITS CALLED" "{p.calls}", chipOf "UNITS LOST" "{p.losses}"]) ::
+              lbl 11 Pl.inkDim "RECENT GAMES   Republic VI against the Southern Empire" ::
+              recentBox m p.recent ::
+              [centred (lbl 12 Pl.inkDim "esc  back")]);
+  Box [Col, W uiW, H uiH, Center, Mid] [card].
+bestStr 0 = "-".
+bestStr b = "{b} rounds".
+recentBox m Nil = lbl 13 Pl.inkDim "no game finished yet -- play one through".
+# the list scrolls in place under the wheel; 30 px a row
+recentBox m rs = Box [Col, Gap 4, H 236, Clip, Scroll 0 m.ss] (recentRows rs 0).
+recentRows Nil i = Nil.
+recentRows r i | i == 50 = Nil.
+recentRows (g :: r) i =
+  (won, rounds, hqMe, hqEn, cl, lo, ki, dm) = g;
+  res = case won == 1 of True -> "WIN" | False -> "LOSS";
+  col = case won == 1 of True -> Pl.yellow | False -> Pl.danger;
+  Box [Row, Gap 16, Mid, Pad 5, H 26, Round 6, Bg Pl.chip]
+      (Box [Row, W 48] [lbl 13 col res] ::
+       Box [Row, W 90] [lbl 13 Pl.ink "{rounds} rounds"] ::
+       Box [Row, W 90] [lbl 12 Pl.inkDim "HQ {hqMe} : {hqEn}"] ::
+       [lbl 12 Pl.inkDim "called {cl}   lost {lo}   destroyed {ki}   damage {dm}"]) :: recentRows r (i + 1).
+
+topBar m =
+  Box [Row, H 46, Pad 8, Gap 14, Mid, Bga Pl.glass]
+      (tag Pl.yellow Pl.paper "TURN {m.tno}" ::
+       tag Pl.blueDark Pl.blueLight "YOU" ::
+       stat "HQ" Pl.ink "{m.me.hq}" ::
+       stat "SUPPLY" (supplyCol m) "{supplyShown m}" ::
+       stat "DECK" Pl.ink "{List.len m.me.deck}" ::
+       stat "HAND" Pl.ink "{List.len m.me.hand}" ::
+       grow ::
+       stat "HQ" Pl.ink "{m.en.hq}" ::
+       stat "SUPPLY" Pl.ink "{m.en.stock}" ::
+       tag Pl.redDark Pl.redLight "ENEMY" ::
+       [tag (case m.env >= 4 of True -> Pl.yellow | False -> Pl.chip) (case m.env >= 4 of True -> Pl.paper | False -> Pl.ink) "ENV {m.env}"]).
+
+# the supply figure: counts up or down one a tick, amber while it moves
+supplyShown m =
+  (sv, st) = m.supV;
+  sv.
+supplyCol m =
+  (sv, st) = m.supV;
+  case st < 400 of True -> Pl.yellow | False -> Pl.ink.
+msgLine m =
+  Box [Row, H 30, Pad 4, Center, Mid] [tE 14 (960, 930, 720) 760 m.msg].
+
+middle m =
+  Box [Row, Grow, Pad 10]
+      [Box [Col, Grow] [grow, bannerBox m, grow], panel m].
+bannerBox m | m.bt > 0 =
+  age = case m.title == 1 of True -> 1000 | False -> Mo.clampK ((900 - m.bt) * 1000 / 260);
+  em = case m.title == 1 of True -> 44 | False -> 16 + Mo.backOut age * 28 / 1000;
+  centred (Box [Row, Pad 14, Round 14, Bga Pl.glass] [lbl em Pl.yellow m.banner]).
+bannerBox m = spacer 1.
+
+# the unit panel: whatever the cursor or the selection is on
+panel m = panelOf m (panelUnit m).
+panelOf m (s, z, c) | s < 0 = spacer 1.
+panelOf m (s, z, c) = Box [Col] [panelFor m s z c (Bd.slotOf (Bd.sideOf m s) z c), grow].
+panelUnit m = case m.sel of
+    Md.SUnit z c -> (0, z, c)
+  | Md.STarget z c -> panelTarget m z c
+  | Md.SPlace i z -> (0 - 1, 0, 0)
+  | s -> case m.zone == 0 of
+      True -> (0 - 1, 0, 0)
+    | False -> case Bd.alive (Bd.slotOf m.me m.zone m.cur) of True -> (0, m.zone, m.cur) | False -> (0 - 1, 0, 0).
+panelTarget m az ac = case m.zone == 3 of
+    True -> (0, 1, ac)
+  | False -> case Bd.alive (Bd.slotOf m.en m.zone m.cur) of True -> (1, m.zone, m.cur) | False -> (0, 1, ac).
+panelFor m s z c u =
+  cd = Bd.uCard u;
+  who = case s == 0 of True -> "YOURS" | False -> "ENEMY";
+  mode = case u.down == 1 of
+    True -> "face down"
+  | False -> case u.mode == 1 of True -> "OVERWATCH" | False -> (case u.chg == 1 of True -> "CHARGED" | False -> "attack mode");
+  k = Mo.easeOut (Mo.clampK (m.hovT * 1000 / 220));
+  rim = case s == 0 of True -> Pl.blueLight | False -> Pl.redLight;
+  Box [Col, W 250, Pad 6, Gap 8, Round 12, Shadow, Bga (mixA Pl.glass Pl.glassLit (1000 - k)), Bord rim]
+      [Box [Row, Pad 8, Gap 8, Round 8, Bg (bandOf cd), Mid]
+           [tE 17 Pl.white 150 (Cd.cName cd), grow, lbl 11 (mixC Pl.white (bandOf cd) 300) who],
+       Box [Col, Pad 4, Gap 8]
+           [tE 12 Pl.inkDim 226 "{Md.zoneName z} {c + 1}   {mode}{vetTag u}{readyTag u}",
+            Box [Row, Gap 8] (statChips cd u),
+            lbl 11 Pl.inkDim "drain {Cd.cDrain cd}   call {Cd.cCost cd}",
+            panelHelp m s z u]].
+statChips cd u | Cd.cKind cd == 1 = [chipOf "GEN" "+{Cd.cGen cd}", chipOf "HP" "{u.hp}/{Bd.uMax u}"].
+statChips cd u = [chipOf "ATK" "{u.atk}", chipOf "HP" "{u.hp}/{Bd.uMax u}"].
+chipOf cap v =
+  Box [Col, Grow, Pad 6, Round 8, Bg Pl.chip, Center, Mid]
+      [lbl 10 Pl.inkDim cap, lbl 20 Pl.ink v].
+helpLines ls = Box [Col, Gap 5] ls.
+mixC (r1, g1, b1) (r2, g2, b2) k = (r1 + (r2 - r1) * k / 1000, g1 + (g2 - g1) * k / 1000, b1 + (b2 - b1) * k / 1000).
+mixA (r1, g1, b1, a1) (r2, g2, b2, a2) k = (r1 + (r2 - r1) * k / 1000, g1 + (g2 - g1) * k / 1000, b1 + (b2 - b1) * k / 1000, a1 + (a2 - a1) * k / 1000).
+vetTag u | u.vet > 0 = "   vet {u.vet}".
+vetTag u = "".
+readyTag u | u.ready == 1 = "   ready".
+readyTag u = "   spent".
+panelHelp m 0 1 u | Bd.uKind u == 2 = helpLines [keyLine "C" "charge", keyLine "F" "fire", keyLine "R" "retreat", keyLine "esc" "back"].
+panelHelp m 0 1 u = helpLines [keyLine "A" "attack", keyLine "O" "overwatch", keyLine "R" "retreat", keyLine "esc" "back"].
+panelHelp m 0 2 u | Bd.uKind u != 1 = helpLines [keyLine "V" "advance", keyLine "esc" "back"].
+panelHelp m s z u = spacer 1.
+
+# a card's header band by kind
+bandOf cd | Cd.cKind cd == 1 = Pl.bandSup.
+bandOf cd | Cd.cKind cd == 2 = Pl.bandArt.
+bandOf cd | Cd.cSoft cd == 1 = Pl.bandInf.
+bandOf cd = Pl.bandArm.
+
+# the hand: cards facing the viewer, centred; the cursor's card lifted,
+# lit and rimmed amber
+cardW = 124.
+cardH = 150.
+handBar m =
+  Box [Row, H 184, Pad 10, Gap 10, Center, Clip, Scroll m.hs 0] (cards m m.me.hand 0).
+# the departing card's ghost shrinks in place over 200 ms so the hand
+# closes the gap; the last card, just dealt, grows in over 200 ms
+cards m Nil i = ghost m i Nil.
+cards m (k :: r) i = ghost m i (card m (Cd.cardOf k) i (dealtW m i) :: cards m r (i + 1)).
+ghost m i rest =
+  (gi, gt) = m.gone;
+  case gi == i and gt < 200 of
+    True -> stub (Int.max 1 (cardW - Mo.easeOut (gt * 1000 / 200) * cardW / 1000)) :: rest
+  | False -> rest.
+dealtW m i | i == List.len m.me.hand - 1 and m.dealt < 200 = Int.max 1 (Mo.easeOut (m.dealt * 1000 / 200) * cardW / 1000).
+dealtW m i = cardW.
+stub w =
+  Box [Col, W w, H (cardH + 14)]
+      [spacer 14, Box [Col, Grow, Round 10, Bg Pl.paper, Bord Pl.edge] Nil].
+card m cd i w | w < cardW = stub w.
+card m cd i w =
+  sel = case m.sel of Md.SNone -> m.zone == 0 and m.cur == i | Md.SPlace j z -> j == i | s -> False;
+  afford = m.me.stock >= Cd.cCost cd;
+  k = case sel of True -> Mo.easeOut (Mo.clampK (m.hovT * 1000 / 140)) | False -> 0;
+  face = mixC Pl.paper Pl.paperLit k;
+  rim = case sel of True -> mixC Pl.edge Pl.yellow k | False -> Pl.edge;
+  body = Box [Col, W cardW, H cardH, Pad 5, Gap 6, Round 10, Shadow, Bg face, Bord rim]
+             (Box [Row, H 32, Pad 6, Round 7, Bg (bandOf cd), Mid, Gap 4]
+                  [tE 13 Pl.white 76 (Cd.cName cd), grow, costBadge afford (Cd.cCost cd)] ::
+              Box [Row, Grow, Round 7, Bg (mixC face Pl.paper 500), Center, Mid]
+                  [lbl 11 (mixC Pl.inkDim (bandOf cd) 400) (kindName cd)] ::
+              [Box [Row, H 44, Pad 2, Gap 6, Mid] (bigStats cd)]);
+  lift = 14 - k * 14 / 1000;
+  Box [Col, W cardW, H (cardH + 14)] [spacer lift, body].
+costBadge afford cost =
+  Box [Row, W 22, H 22, Round 11, Bg (case afford of True -> Pl.yellow | False -> Pl.danger), Center, Mid]
+      [lbl 12 Pl.paper "{cost}"].
+bigStats cd | Cd.cKind cd == 1 = [figure "+{Cd.cGen cd}" "GEN" Pl.yellow, grow, figure "{Cd.cDef cd}" "DEF" Pl.ink].
+bigStats cd = [figure "{Cd.cAtk cd}" "ATK" Pl.ink, grow, figure "{Cd.cDef cd}" "DEF" Pl.ink].
+figure v cap col = Box [Col, Center, Mid] [lbl 22 col v, lbl 9 Pl.inkDim cap].
+kindName cd | Cd.cKind cd == 1 = "SUPPORT".
+kindName cd | Cd.cKind cd == 2 = "ARTILLERY".
+kindName cd | Cd.cSoft cd == 1 = "INFANTRY".
+kindName cd = "ARMOUR".
+
+# ---- the wheel: whatever is under the cursor scrolls in place ---------------------------
+# (dy in tenths of a notch, up positive): the hand while the cursor is
+# in it, the Stats screen's list of games
+wheel m dy | m.screen == Md.scrStats = { m | ss = Pr.clampTo (m.ss - dy * 4) (ssMax m) }.
+wheel m dy | m.screen == Md.scrPlay and m.zone == 0 = { m | hs = Pr.clampTo (m.hs - dy * 6) (hsMax m) }.
+wheel m dy = m.
+
+handInner = uiW - 20.
+hsMax m =
+  n = List.len m.me.hand;
+  Int.max 0 (n * cardW + (n - 1) * 10 - handInner).
+ssMax m = Int.max 0 (Int.min 50 (List.len m.prof.recent) * 30 - 236).
+# the cursor's card stays in view when the cursor moves; otherwise the
+# hand is where the wheel left it
+followCard m | m.zone != 0 = m.
+followCard m =
+  cx = m.cur * (cardW + 10);
+  hs1 = case cx < m.hs of True -> cx | False -> m.hs;
+  hs2 = case cx + cardW > hs1 + handInner of True -> cx + cardW - handInner | False -> hs1;
+  { m | hs = Pr.clampTo hs2 (hsMax m) }.

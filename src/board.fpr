@@ -1,0 +1,83 @@
+# ---- units, sides and the board's geometry ---------------------------------------------
+
+unsafe module.
+
+Pr = use "prelude".
+Cd = use "cards".
+Mo = use "motion".
+
+# ---- units and sides ----------------------------------------------------------
+# A slot holds a unit record; id < 0 is empty.  mode 0 attack / 1 overwatch,
+# ready = may act this turn, down = face-down ambush (rdy = became ready),
+# chg = artillery charged, vet = veterancy tokens, age = turns on board,
+# ow = intercepted already this enemy turn.  flash/born/dead/dt are purely
+# visual (ms).
+
+noU = { id = 0 - 1, hp = 0, atk = 0, mode = 0, ready = 0, down = 0, rdy = 0,
+        chg = 0, vet = 0, age = 0, ow = 0, flash = 0, born = 900, dead = 0, dt = 0 }.
+mkU c down = { id = Cd.cId c, hp = Cd.cDef c, atk = Cd.cAtk c, mode = 0, ready = 0, down = down, rdy = 0,
+               chg = 0, vet = 0, age = 0, ow = 0, flash = 0, born = 0, dead = 0, dt = 0 }.
+alive u = u.id >= 0 and u.dead == 0.
+uCard u = Cd.cardOf u.id.
+uKind u = Cd.cKind (uCard u).
+uSoft u = Cd.cSoft (uCard u).
+uMax u = Cd.cDef (uCard u) + u.vet.
+emptyRow = [noU, noU, noU, noU, noU].
+
+# side = { hq, stock, deck, hand, fwd, rear }
+mkSide deck hand = { hq = 15, stock = 0, deck = deck, hand = hand, fwd = emptyRow, rear = emptyRow }.
+rowOf p 1 = p.fwd.
+rowOf p z = p.rear.
+setRow p 1 row = { p | fwd = row }.
+setRow p z row = { p | rear = row }.
+slotOf p z c = Pr.nth (rowOf p z) c noU.
+setSlot p z c u = setRow p z (Pr.setAt (rowOf p z) c u).
+occ p z c = alive (slotOf p z c).
+
+sideOf m 0 = m.me.
+sideOf m s = m.en.
+setSide m 0 p = { m | me = p }.
+setSide m s p = { m | en = p }.
+
+# supply rate: HQ 2 (1 at ENV 7+) + GEN of face-up rear support - DRAIN of everything
+genRow row = row |> List.fold (fn u total -> case alive u and u.down == 0 and uKind u == 1 of
+    True -> Cd.cGen (uCard u) + total
+  | False -> total) 0.
+drainRow row = row |> List.fold (fn u total -> case alive u of
+    True -> Cd.cDrain (uCard u) + total
+  | False -> total) 0.
+rate m p = hqGen m + genRow p.rear - drainRow p.fwd - drainRow p.rear.
+hqGen m | m.env >= 7 = 1.
+hqGen m = 2.
+
+# ---- geometry: the board in the walker's milli units ------------------------------
+# z runs from the enemy HQ (far, negative) to your hand (near, positive).
+
+colX c = (c - 2) * 2400.
+zOf 0 1 = 2400.          # my forward
+zOf 0 2 = 5000.          # my rear
+zOf 0 3 = 7300.          # my HQ
+zOf 1 1 = 0 - 2400.
+zOf 1 2 = 0 - 5000.
+zOf 1 3 = 0 - 7600.
+zOf s z = 0.
+posOf s z c = (colX c, 0, zOf s z).
+hqPos s = (0, 0, zOf s 3).
+dirOf 0 = 0 - 1.          # "toward the enemy" along z
+dirOf s = 1.
+
+tgtPos s 3 c me = hqPos s.
+tgtPos s z c me = posOf s z c.
+
+aimAt base s (x, y, z) (tx, ty, tz) =
+  base + dirOf s * Mo.atanM (tx - x) (Int.abs (tz - z)).
+# the yaw a unit at column c on side s turns to hit (tz, tc)
+aimYaw m s c tz tc = aimAt (case s == 0 of True -> 0 | False -> 3142) s (posOf s 1 c) (tgtPos (1 - s) tz tc s).
+# where the shot leaves: the rifle's tip for a soldier, the barrel's for a tank
+muzzle m s c yaw =
+  u = slotOf (sideOf m s) 1 c;
+  (x, y, z) = posOf s 1 c;
+  (fx, fz) = Mo.facing yaw;
+  case uSoft u == 1 of
+    True -> (x + fx * 720 / 1000, 860, z + fz * 720 / 1000)
+  | False -> (x + fx * 2200 / 1000, 1090, z + fz * 2200 / 1000).

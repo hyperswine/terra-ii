@@ -1,0 +1,192 @@
+# ---- the rules: validation, effects and the phases of a turn ----------------------------
+
+unsafe module.
+
+Pr = use "prelude".
+Cd = use "cards".
+Bd = use "board".
+Md = use "model".
+Sv = use "save".
+Sfx = use "mods/sfx".
+
+# ---- rules: validation ------------------------------------------------------------
+
+# a forward unit at column c on side s may hit (tz, tc) on the other side
+targetOk m s c tz tc =
+  o = Bd.sideOf m (1 - s);
+  case Int.abs (c - tc) <= 1 of
+    False -> False
+  | True -> targetOk2 o tz tc.
+targetOk2 o 1 tc = Bd.occ o 1 tc.
+targetOk2 o 2 tc = Bd.occ o 2 tc and not (Bd.occ o 1 tc).       # cover
+targetOk2 o 3 tc = lane o (tc - 1) or lane o tc or lane o (tc + 1).
+targetOk2 o z tc = False.
+lane o c | c < 0 or c > 4 = False.
+lane o c = not (Bd.occ o 1 c) and not (Bd.occ o 2 c).
+# artillery ignores cover, columns and lanes: any rear unit, or the HQ
+fireOk m s tz tc =
+  o = Bd.sideOf m (1 - s);
+  case tz == 3 of
+    True -> True
+  | False -> tz == 2 and Bd.occ o 2 tc.
+
+canAct u = Bd.alive u and u.ready == 1 and u.down == 0.
+
+# ---- rules: effects -----------------------------------------------------------------
+
+damageUnit m s z c dmg =
+  p = Bd.sideOf m s;
+  u = Bd.slotOf p z c;
+  hp2 = u.hp - dmg;
+  u2 = { u | hp = hp2, flash = 250 };
+  m1 = { m | dmg = m.dmg + (case s == 1 of True -> dmg | False -> 0) };
+  m2 = Md.cue (Md.number (Md.note (Bd.setSide m1 s (Bd.setSlot p z c u2)) "{Cd.cName (Bd.uCard u)} takes {dmg}") (Bd.posOf s z c) "-{dmg}") Sfx.hit;
+  case Bd.alive u and hp2 <= 0 of
+    True -> slay m2 s z c
+  | False -> m2.
+slay m s z c =
+  p = Bd.sideOf m s;
+  u = Bd.slotOf p z c;
+  m2 = Bd.setSide m s (Bd.setSlot p z c { u | dead = 1, dt = 0, hp = 0 });
+  (mx, my, mz) = Bd.posOf s z c;
+  Md.cue (Md.note { m2 | env = Int.min 10 (m2.env + (case Bd.uSoft u == 1 of True -> 1 | False -> 2)),
+                   fx = sparks m2.fx (Bd.posOf s z c) 6, shake = 160, marks = (mx, mz, 0) :: m2.marks,
+                   lostU = m2.lostU + Pr.bi (s == 0), kills = m2.kills + Pr.bi (s == 1) } "{Cd.cName (Bd.uCard u)} destroyed") Sfx.kill.
+damageHq m s dmg =
+  p = Bd.sideOf m s;
+  hq2 = p.hq - dmg;
+  m2 = Bd.setSide { m | dmg = m.dmg + (case s == 1 of True -> dmg | False -> 0) } s { p | hq = hq2 };
+  (hx, hy, hz) = Bd.hqPos s;
+  m3 = Md.cue (Md.number (Md.note { m2 | fx = sparks m2.fx (Bd.hqPos s) 8, shake = 320,
+                               marks = (hx + (p.hq * 1237) % 2400 - 1200, hz - Bd.dirOf s * ((p.hq * 811) % 900 + 300), 0) :: m2.marks }
+                        "HQ hit for {dmg}: {hq2} left") (Bd.hqPos s) "-{dmg}") Sfx.hqHit;
+  case hq2 <= 0 of
+    True -> Md.cue (Md.note (Sv.endRec { m3 | over = 1 + (1 - s), screen = Md.scrOver, banner = (case s == 1 of True -> "VICTORY" | False -> "DEFEAT"), bt = 100000, queue = Nil,
+                                     msg = "ENTER  new game      S  stats      Q  quit" } (s == 1))
+                      (case s == 1 of True -> "VICTORY" | False -> "DEFEAT"))
+                (case s == 1 of True -> Sfx.victory | False -> Sfx.defeat)
+  | False -> m3.
+sparks fx pos n | n == 0 = fx.
+sparks fx pos n =
+  (x, y, z) = pos;
+  sparks ((x + (n * 337) % 900 - 450, 900 + (n * 191) % 500, z + (n * 271) % 700 - 350, 0) :: fx) pos (n - 1).
+
+# the attack itself: overwatch intercept (once per enemy turn) and ambush
+# reveal happen BEFORE the blow lands; a dead attacker lands nothing.
+resolveAttack m s c tz tc =
+  m1 = intercept m s c tc;
+  m2 = ambush m1 s c tz tc;
+  a = Bd.slotOf (Bd.sideOf m2 s) 1 c;
+  case Bd.alive a of
+    False -> Md.note m2 "the attacker fell before striking"
+  | True -> landBlow (spend m2 s 1 c) s c tz tc a.atk.
+landBlow m s c 3 tc dmg = damageHq m (1 - s) dmg.
+landBlow m s c tz tc dmg = damageUnit m (1 - s) tz tc dmg.
+spend m s z c =
+  p = Bd.sideOf m s;
+  u = Bd.slotOf p z c;
+  Bd.setSide m s (Bd.setSlot p z c { u | ready = 0, chg = 0 }).
+
+intercept m s c tc = intGo m s c tc (Int.max 0 (tc - 1)) (Int.min 4 (tc + 1)).
+intGo m s c tc k hi | k > hi = m.
+intGo m s c tc k hi =
+  o = Bd.sideOf m (1 - s);
+  u = Bd.slotOf o 1 k;
+  case Bd.alive u and u.mode == 1 and u.ow == 0 of
+    True -> interceptBy (Bd.setSide m (1 - s) (Bd.setSlot o 1 k { u | ow = 1 })) s c k (u.atk / 2)
+  | False -> intGo m s c tc (k + 1) hi.
+interceptBy m s c k dmg =
+  m2 = damageUnit m s 1 c dmg;
+  Md.cue (Md.note { m2 | fx = sparks m2.fx (Bd.posOf s 1 c) 4 } "overwatch intercepts for {dmg}") Sfx.intercept.
+
+# ambush: attacking the forward unit in a column, or the face-down card
+# itself, wakes a READY face-down rear card: full ATK to the attacker, then
+# it stands face-up in the rear
+ambush m s c tz tc | tz == 3 = m.
+ambush m s c tz tc =
+  o = Bd.sideOf m (1 - s);
+  u = Bd.slotOf o 2 tc;
+  case Bd.alive u and u.down == 1 and u.rdy == 1 of
+    True -> reveal m s c tc u
+  | False -> m.
+reveal m s c tc u =
+  o = Bd.sideOf m (1 - s);
+  m2 = Bd.setSide m (1 - s) (Bd.setSlot o 2 tc { u | down = 0, born = 0 });
+  m3 = damageUnit m2 s 1 c u.atk;
+  Md.cue (Md.note m3 "AMBUSH! {Cd.cName (Bd.uCard u)} hits for {u.atk}") Sfx.ambush.
+
+# ---- rules: phases --------------------------------------------------------------------
+
+readyRow row = row |> List.map rdyOne.
+rdyOne u | Bd.alive u =
+  age2 = u.age + 1;
+  vet2 = case age2 % 3 == 0 and Bd.uKind u != 1 of True -> 1 | False -> 0;
+  { u | ready = 1, ow = 0, age = age2, vet = u.vet + vet2, atk = u.atk + vet2, hp = u.hp + vet2,
+        rdy = u.down }.
+rdyOne u = u.
+# repair: combat units in the rear recover 1 (2 with Engineering Corps)
+repairRow row amt = row |> List.map (fn u -> repairOne u amt).
+repairOne u amt | Bd.alive u and Bd.uKind u != 1 = { u | hp = Int.min (Bd.uMax u) (u.hp + amt) }.
+repairOne u amt = u.
+hasId row k = row |> List.fold (fn u found -> found or Bd.alive u and u.id == k) False.
+
+startTurn m s =
+  p = Bd.sideOf m s;
+  eng = Pr.bi (hasId p.rear 2);
+  p1 = { p | fwd = readyRow p.fwd, rear = repairRow (readyRow p.rear) (1 + eng) };
+  m1 = Bd.setSide m s p1;
+  r = Bd.rate m1 p1;
+  stock2 = Int.max 0 (Int.min p1.stock 3 + r);
+  p2 = { p1 | stock = stock2 };
+  (p3, m2) = draw (Bd.setSide m1 s p2) s p2;
+  m3 = Md.cue (Md.note { m2 | turn = s, tno = m2.tno + Pr.bi (s == 0),
+              banner = (case s == 0 of True -> "YOUR TURN" | False -> "ENEMY TURN"), bt = 900,
+              sel = Md.SNone } "turn {m2.tno + Pr.bi (s == 0)} side {s}: supply {stock2} (rate {r})")
+           (case s == 0 of True -> Sfx.yourTurn | False -> Sfx.enemyTurn);
+  m3.
+draw m s p = case p.deck of
+    Nil -> (p, damageHq { m | msg = "deck out: HQ takes 2" } s 2)
+  | k :: r -> drawn (case s == 0 of True -> { m | dealt = 0 } | False -> m) s { p | deck = r, hand = p.hand + [k] }.
+drawn m s p = (p, Bd.setSide m s p).
+
+endTurn m s =
+  p = Bd.sideOf m s;
+  p1 = { p | fwd = envRow p.fwd m.env, rear = envRow p.rear m.env, hand = trim p.hand 7 };
+  m1 = Bd.setSide m s p1;
+  m2 = collect m1 s 1 0;
+  m3 = collect m2 s 2 0;
+  { m3 | queue = [Md.AStart (1 - s)], sel = Md.SNone }.
+envRow row env | env >= 10 = envAll row.
+envRow row env | env >= 4 = envSoft row.
+envRow row env = row.
+envSoft row = row |> List.map (fn u -> case Bd.alive u and Bd.uSoft u == 1 of
+    True -> { u | hp = u.hp - 1, flash = 250 }
+  | False -> u).
+envAll row = row |> List.map (fn u -> case Bd.alive u of
+    True -> { u | hp = u.hp - 1, flash = 250 }
+  | False -> u).
+# units the ENV took to 0
+collect m s z c | c > 4 = m.
+collect m s z c =
+  u = Bd.slotOf (Bd.sideOf m s) z c;
+  case Bd.alive u and u.hp <= 0 of
+    True -> collect (slay m s z c) s z (c + 1)
+  | False -> collect m s z (c + 1).
+trim l n | List.len l <= n = l.
+trim l n = trim (Pr.delAt l (List.len l - 1)) n.
+
+# ---- rules: the player's and the AI's actions, applied ------------------------------
+
+callCard m s i z c =
+  p = Bd.sideOf m s;
+  k = Pr.nth p.hand i (0 - 1);
+  cd = Cd.cardOf k;
+  down = Pr.bi (z == 2 and Cd.cKind cd != 1);
+  cost = Cd.cCost cd - down;
+  case k >= 0 and p.stock >= cost and not (Bd.occ p z c) and (z == 1 or z == 2) of
+    False -> Md.oops m "cannot call {Cd.cName cd} there"
+  | True -> called m s p i z c cd (Bd.mkU cd down) cost.
+called m s p i z c cd u cost =
+  p2 = Bd.setSlot { p | stock = p.stock - cost, hand = Pr.delAt p.hand i } z c { u | born = 0 - 380 };
+  m2 = case s == 0 of True -> Bd.setSide { m | gone = (i, 0), called = m.called + 1 } s p2 | False -> Bd.setSide m s p2;
+  Md.cue (Md.note m2 "{Md.sideName s}: {Cd.cName cd} called to {Md.zoneName z} {c + 1}") Sfx.call.

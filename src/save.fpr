@@ -1,0 +1,149 @@
+# ---- the profile and the live game on the disk -----------------------------------------
+# An append-only record per game (std/fs over the QLOG log), folded into the model.
+
+unsafe module.
+
+Pr = use "prelude".
+Bd = use "board".
+Md = use "model".
+FS = use "std/fs#84826bc9e8ddb4b5".
+Core = use "mods/coreutil".
+
+# ---- the profile ------------------------------------------------------------------
+# One append-only record on the disk (std/fs over the QLOG log at
+# terra2/profile), a line per event: "start <seed>" when a game begins,
+# "end <seed> win|loss <rounds> <hqMe> <hqEn> <called> <lost> <destroyed>
+# <damage>" when an HQ falls.  Replayed at boot and folded into the
+# totals; every line the game writes is folded into the model's copy
+# too, so the Stats screen never lags the disk.  A start with no end is
+# a game abandoned (a restart, a quit).
+
+profUrl = "terra2/profile".
+
+profFold p line =
+  n = strlen line;
+  (w, i) = Core.wordAt line 0 n;
+  case Core.strEq w "start" of
+    True -> { p | played = p.played + 1, gone = p.gone + 1 }
+  | False -> (case Core.strEq w "end" of
+      True -> profEnd p line i n
+    | False -> p).
+profEnd p line i n =
+  (sd, i2) = Core.wordAt line i n;
+  (res, i3) = Core.wordAt line i2 n;
+  ws = intsFrom line i3 n;
+  won = Core.strEq res "win";
+  rounds = Pr.nth ws 0 0;
+  best2 = case won and (p.best == 0 or rounds < p.best) of True -> rounds | False -> p.best;
+  { p | gone = Int.max 0 (p.gone - 1), won = p.won + Pr.bi won, lost = p.lost + Pr.bi (not won),
+        rounds = p.rounds + rounds, best = best2,
+        calls = p.calls + Pr.nth ws 3 0, losses = p.losses + Pr.nth ws 4 0,
+        recent = (Pr.bi won, rounds, Pr.nth ws 1 0, Pr.nth ws 2 0, Pr.nth ws 3 0, Pr.nth ws 4 0, Pr.nth ws 5 0, Pr.nth ws 6 0) :: p.recent }.
+intsFrom line i n | i >= n = Nil.
+intsFrom line i n =
+  (w, j) = Core.wordAt line i n;
+  case strlen w == 0 of
+    True -> intsFrom line j n
+  | False -> Core.parseDigits w :: intsFrom line j n.
+
+# a line for the disk: folded now, written by update's flush
+rec m line = { m | prof = profFold m.prof line, recs = (profUrl, line) :: m.recs }.
+startRec m = rec m "start {m.seed}".
+endRec m won =
+  w = case won of True -> "win" | False -> "loss";
+  m2 = rec m "end {m.seed} {w} {m.tno} {Int.max 0 m.me.hq} {Int.max 0 m.en.hq} {m.called} {m.lostU} {m.kills} {m.dmg}";
+  { m2 | recs = (gameUrl, "none") :: m2.recs, dirty = 0 }.
+
+# ---- the live game --------------------------------------------------------------
+# The board, saved at terra2/game whenever a turn of yours begins (the
+# state after income, with nothing in flight) and cleared to "none" when
+# an HQ falls.  Boot reads it back; the title then offers Continue.  Only
+# what the rules need is kept -- sides, turn, ENV, the counters -- never
+# the animation, the cursor or the queue.  Units go out as eleven
+# numbers each with the id shifted by one so an empty slot is 0.
+
+gameUrl = "terra2/game".
+gameRec m =
+  "terra2 1\ng {m.seed} {m.turn} {m.tno} {m.env} {m.called} {m.lostU} {m.kills} {m.dmg}\n" + sideRec m.me + sideRec m.en.
+sideRec p =
+  "s {p.hq} {p.stock}\nd {ints p.deck}\nh {ints p.hand}\nf {units p.fwd}\nr {units p.rear}\n".
+ints Nil = "".
+ints (x :: r) = "{x} " + ints r.
+units Nil = "".
+units (u :: r) =
+  "{u.id + 1} {u.hp} {u.atk} {u.mode} {u.ready} {u.down} {u.rdy} {u.chg} {u.vet} {u.age} {u.ow} " + units r.
+
+loadGame m s =
+  ls = Core.lines s;
+  case List.len ls == 12 of
+    False -> m
+  | True -> loadGame2 m ls.
+loadGame2 m ls =
+  g = lineInts (Pr.nth ls 1 "");
+  p0 = sideOfLines (Pr.nth ls 2 "") (Pr.nth ls 3 "") (Pr.nth ls 4 "") (Pr.nth ls 5 "") (Pr.nth ls 6 "");
+  p1 = sideOfLines (Pr.nth ls 7 "") (Pr.nth ls 8 "") (Pr.nth ls 9 "") (Pr.nth ls 10 "") (Pr.nth ls 11 "");
+  { m | me = p0, en = p1, seed = Pr.nth g 0 m.seed, turn = Pr.nth g 1 0, tno = Pr.nth g 2 0, env = Pr.nth g 3 0,
+        called = Pr.nth g 4 0, lostU = Pr.nth g 5 0, kills = Pr.nth g 6 0, dmg = Pr.nth g 7 0, cont = 1 }.
+# a line's numbers after its one-letter tag
+lineInts line =
+  n = strlen line;
+  (w, i) = Core.wordAt line 0 n;
+  intsFrom line i n.
+sideOfLines sl dl hl fl rl =
+  sv = lineInts sl;
+  { hq = Pr.nth sv 0 15, stock = Pr.nth sv 1 0, deck = lineInts dl, hand = lineInts hl,
+    fwd = unitsOf (lineInts fl) 5, rear = unitsOf (lineInts rl) 5 }.
+unitsOf ns 0 = Nil.
+unitsOf ns k = unitOf ns :: unitsOf (List.drop ns 11) (k - 1).
+unitOf ns =
+  { Bd.noU | id = Pr.nth ns 0 0 - 1, hp = Pr.nth ns 1 0, atk = Pr.nth ns 2 0, mode = Pr.nth ns 3 0, ready = Pr.nth ns 4 0,
+          down = Pr.nth ns 5 0, rdy = Pr.nth ns 6 0, chg = Pr.nth ns 7 0, vet = Pr.nth ns 8 0, age = Pr.nth ns 9 0,
+          ow = Pr.nth ns 10 0, born = 1000 }.
+
+saveGame m =
+  _ = print "[terra2] game saved: turn {m.tno}";
+  { m | recs = (gameUrl, gameRec m) :: m.recs, dirty = 0 }.
+# idle with a turn of yours to keep: the save goes out with the records
+idleNow m =
+  Md.An kind s fz fc tz tc t done = m.anim;
+  kind == 0 and (case m.queue of Nil -> True | q -> False) and m.over == 0 and m.turn == 0.
+
+# the disk, read at boot and appended to as the game goes
+loadProf m me 0 =
+  _ = print "[terra2] profile: no disk, games are not recorded";
+  { m | fsOn = 0 }.
+loadProf m me fs =
+  r = FS.replay me fs profUrl;
+  p = profOf r;
+  _ = drop r;
+  _ = print "[terra2] profile: {p.played} games ({p.won} won, {p.lost} lost, {p.gone} abandoned)";
+  g = FS.readLatest me fs gameUrl;
+  m2 = gameOf { m | prof = p, fsOn = 1 } g;
+  _ = drop g;
+  _ = announce m2;
+  m2.
+announce m | m.cont == 1 =
+  _ = print "[terra2] a game is waiting: turn {m.tno}";
+  0.
+announce m = 0.
+gameOf m (Ok s) = loadGame m s.
+gameOf m (Err e) = m.
+profOf (Ok s) = Core.lines s |> List.fold (fn line p -> profFold p line) Md.profEmpty.
+profOf (Err e) = Md.profEmpty.
+
+flush env m =
+  m1 = case m.dirty == 1 and idleNow m of
+    True -> saveGame m
+  | False -> m;
+  case m1.recs of
+    Nil -> m1
+  | rs ->
+    (me, fs) = env;
+    _ = writeAll me fs (Pr.rev rs Nil);
+    { m1 | recs = Nil }.
+writeAll me 0 rs = 0.
+writeAll me fs Nil = 0.
+writeAll me fs ((url, r) :: rest) =
+  h = FS.append me fs url (r + "\n");
+  _ = drop h;
+  writeAll me fs rest.

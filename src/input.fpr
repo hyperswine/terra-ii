@@ -1,0 +1,201 @@
+# ---- keys: the selection state machine, and the lifecycle -------------------------------
+# (one clause group: a definition in the middle of it would split it, and the later half wins)
+# evdev codes: 105 left 106 right 103 up 108 down 28 enter 1 esc 14 bksp
+# 57 space 18 e 16 q 25 p 30 a 24 o 19 r 46 c 33 f 47 v 2..6 columns
+
+unsafe module.
+
+Pr = use "prelude".
+Cd = use "cards".
+Bd = use "board".
+Md = use "model".
+Sv = use "save".
+Tm = use "terminal".
+Sfx = use "mods/sfx".
+
+# the track beside the .qa (`#: music` above: run points FPR_ASSETS at it,
+# pack copies it into the bundle); M toggles it.  Original NeoMusic score;
+# source and rebuild notes: models/music/README.md.
+musicFile = "Skyward_Little_World.mp3".
+musicVol = 450.
+
+# the terminal takes every key while it is open; T opens it anywhere
+key m k | m.screen == Md.scrTerm = Tm.termKey m k.
+key m 20 = (Md.cue (Md.show { m | tin = "" } Md.scrTerm) Sfx.pick, Nil).
+key m 16 = (Md.cue { m | qt = 600, msg = "bye" } Sfx.close, Nil).
+key m 25 = ({ m | snap = m.snap + 1 }, Nil).
+key m 59 = ({ m | snap = m.snap + 1 }, Nil).
+key m 50 =
+  on = 1 - m.music;
+  _ = sndMusic musicFile (on * volNow { m | music = on });
+  ({ m | music = on, msg = (case on == 1 of True -> "music on" | False -> "music off") }, Nil).
+# the Keys and Stats screens: esc, enter, K or S return
+key m k | m.screen == Md.scrCards = cardsKey m k.
+key m k | m.screen == Md.scrKeys or m.screen == Md.scrStats =
+  case k == 1 or k == 28 or k == 37 or k == 31 of
+    True -> (Md.cue (Md.goBack m) Sfx.cancel, Nil)
+  | False -> (m, Nil).
+# K, S and C from the title, the pause menu and game over
+key m 37 | m.screen != Md.scrPlay = (Md.cue (Md.show m Md.scrKeys) Sfx.pick, Nil).
+key m 31 | m.screen != Md.scrPlay = (Md.cue (Md.show m Md.scrStats) Sfx.pick, Nil).
+key m 46 | m.screen != Md.scrPlay = (Md.cue (Md.show m Md.scrCards) Sfx.pick, Nil).
+key m k | m.screen == Md.scrPause = pauseKey m k.
+key m 49 | m.title == 1 and m.cont == 1 = newGame m.
+key m 28 | m.title == 1 = begin m.
+key m 28 | m.over != 0 = newGame m.
+key m k | m.title == 1 or m.over != 0 = (m, Nil).
+key m 1 | idleSel m = pauseGame m.
+key m k | m.turn != 0 = ({ m | msg = "enemy turn" }, Nil).
+key m 31 = ({ m | auto = 1 - m.auto, msg = "auto snapshots {1 - m.auto}" }, Nil).
+key m 57 = (Md.cue { m | queue = [Md.AEnd 0], sel = Md.SNone, msg = "end of turn" } Sfx.turnOver, Nil).
+key m 18 = key m 57.
+key m 1 = (Md.cue (cancel m) Sfx.cancel, Nil).
+key m 14 = key m 1.
+key m k | k >= 2 and k <= 6 = (Md.cue (moveCur m (k - 2)) Sfx.cursor, Nil).
+key m 105 = (Md.cue (moveCur m (m.cur - 1)) Sfx.cursor, Nil).
+key m 106 = (Md.cue (moveCur m (m.cur + 1)) Sfx.cursor, Nil).
+key m 103 = (Md.cue (moveZone m 1) Sfx.cursor, Nil).
+key m 108 = (Md.cue (moveZone m (0 - 1)) Sfx.cursor, Nil).
+key m 28 = (confirm m, Nil).
+key m 30 = (unitKey m 30, Nil).
+key m 24 = (unitKey m 24, Nil).
+key m 19 = (unitKey m 19, Nil).
+key m 46 = (unitKey m 46, Nil).
+key m 33 = (unitKey m 33, Nil).
+key m 47 = (unitKey m 47, Nil).
+key m k = (m, Nil).
+
+idleSel m = case m.sel of Md.SNone -> True | s -> False.
+
+# ---- the lifecycle: begin, pause, restart --------------------------------------------------
+# the music's volume for the screen: half while paused
+volNow m | m.music == 0 = 0.
+volNow m | m.screen == Md.scrPause = musicVol / 2.
+volNow m = musicVol.
+
+begin m | m.cont == 1 =
+  _ = sndMusic musicFile musicVol;
+  (Md.cue (Md.note { m | title = 0, screen = Md.scrPlay, bt = 0, queue = Nil, music = 1, cont = 0 } "welcome back: turn {m.tno}") Sfx.open, Nil).
+begin m =
+  _ = sndMusic musicFile musicVol;
+  (Md.cue (Sv.startRec { m | title = 0, screen = Md.scrPlay, bt = 0, queue = [Md.AStart 0], msg = "", music = 1 }) Sfx.open, Nil).
+# a fresh deal from the next seed; the profile, the settings and the
+# snapshot counter carry over
+newGame m =
+  m2 = Md.initWith (Pr.rnd m.seed) (Pr.rnd (Pr.rnd m.seed));
+  m3 = { m2 | title = 0, screen = Md.scrPlay, bt = 0, queue = [Md.AStart 0], msg = "", seed = Pr.rnd m.seed,
+              snap = m.snap, auto = m.auto, music = m.music, prof = m.prof, fsOn = m.fsOn, keys = m.keys };
+  _ = sndMusic musicFile (volNow m3);
+  (Md.cue (Md.note (Sv.startRec m3) "restart: a new game") Sfx.open, Nil).
+pauseGame m =
+  m2 = { m | screen = Md.scrPause, menu = 0, confirm = 0 };
+  _ = sndMusic musicFile (volNow m2);
+  (Md.cue (Md.note m2 "paused") Sfx.toggle, Nil).
+resume m =
+  m2 = { m | screen = Md.scrPlay, msg = "" };
+  _ = sndMusic musicFile (volNow m2);
+  m2.
+# the menu: Resume, Restart (asks first), Stats, Keys, Quit
+pauseKey m 1 | m.confirm == 1 = (Md.cue { m | confirm = 0 } Sfx.cancel, Nil).
+pauseKey m 1 = (Md.cue (resume m) Sfx.cancel, Nil).
+pauseKey m 28 | m.confirm == 1 = newGame m.
+pauseKey m 28 = menuPick m m.menu.
+pauseKey m 103 = (Md.cue { m | menu = (m.menu + 5) % 6 } Sfx.cursor, Nil).
+pauseKey m 108 = (Md.cue { m | menu = (m.menu + 1) % 6 } Sfx.cursor, Nil).
+pauseKey m k = (m, Nil).
+menuPick m 0 = (Md.cue (resume m) Sfx.pick, Nil).
+menuPick m 1 = (Md.cue { m | confirm = 1 } Sfx.pick, Nil).
+menuPick m 2 = (Md.cue (Md.show m Md.scrCards) Sfx.pick, Nil).
+menuPick m 3 = (Md.cue (Md.show m Md.scrStats) Sfx.pick, Nil).
+menuPick m 4 = (Md.cue (Md.show m Md.scrKeys) Sfx.pick, Nil).
+menuPick m i = key m 16.
+
+# the Cards screen: a cursor over the two factions' cards
+cardsKey m 105 =
+  (f, i) = m.ccur;
+  (Md.cue { m | ccur = (f, Int.max 0 (i - 1)) } Sfx.cursor, Nil).
+cardsKey m 106 =
+  (f, i) = m.ccur;
+  (Md.cue { m | ccur = (f, Int.min (List.len (Cd.facIds f) - 1) (i + 1)) } Sfx.cursor, Nil).
+cardsKey m 103 = cardsFac m.
+cardsKey m 108 = cardsFac m.
+cardsKey m k | k == 1 or k == 28 or k == 46 = (Md.cue (Md.goBack m) Sfx.cancel, Nil).
+cardsKey m k = (m, Nil).
+cardsFac m =
+  (f, i) = m.ccur;
+  f2 = 1 - f;
+  (Md.cue { m | ccur = (f2, Int.min (List.len (Cd.facIds f2) - 1) i) } Sfx.cursor, Nil).
+
+# esc: back to where the selection started -- the attacker's slot, the
+# card being placed, or just the selection cleared
+cancel m = case m.sel of
+    Md.STarget z c -> { m | sel = Md.SNone, zone = z, cur = c, msg = "" }
+  | Md.SPlace i z -> { m | sel = Md.SNone, zone = 0, cur = i, msg = "" }
+  | s -> { m | sel = Md.SNone, msg = "" }.
+
+curMax m = case m.sel of
+    Md.SNone -> (case m.zone == 0 of True -> List.len m.me.hand - 1 | False -> 4)
+  | Md.SCard i -> List.len m.me.hand - 1
+  | s -> 4.
+moveCur m c = { m | cur = Int.max 0 (Int.min (curMax m) c) }.
+
+# zones stack bottom to top: hand 0, my rear 2, my forward 1; for a target:
+# enemy forward 1, enemy rear 2, enemy HQ 3
+moveZone m d = case m.sel of
+    Md.STarget z c -> { m | zone = Int.max 1 (Int.min 3 (m.zone + d)), cur = Int.min 4 m.cur }
+  | Md.SPlace i z -> placeZone m i z d
+  | s -> { m | zone = zoneStep m.zone d, cur = Int.min (curMax { m | zone = zoneStep m.zone d }) m.cur }.
+zoneStep 0 d | d > 0 = 2.
+zoneStep 2 d | d > 0 = 1.
+zoneStep 1 d | d < 0 = 2.
+zoneStep 2 d | d < 0 = 0.
+zoneStep z d = z.
+placeZone m i z d =
+  cd = Cd.cardOf (Pr.nth m.me.hand i 0);
+  z2 = case d > 0 of True -> 1 | False -> 2;
+  case z2 == 1 and Cd.cKind cd == 1 of
+    True -> Md.oops m "support units serve in the rear"
+  | False -> { m | sel = Md.SPlace i z2, zone = z2 }.
+
+confirm m = case m.sel of
+    Md.SNone -> Md.cue (pick m) Sfx.pick
+  | Md.SCard i -> m
+  | Md.SPlace i z -> { m | queue = [Md.ACall 0 i z m.cur], sel = Md.SNone, zone = z }
+  | Md.SUnit z c -> unitKey m 30
+  | Md.STarget z c -> aim m z c.
+pick m | m.zone == 0 =
+  k = Pr.nth m.me.hand (Int.min m.cur (List.len m.me.hand - 1)) (0 - 1);
+  case k < 0 of
+    True -> Md.oops m "no card there"
+  | False -> { m | sel = Md.SPlace m.cur (case Cd.cKind (Cd.cardOf k) == 1 of True -> 2 | False -> 1),
+                   zone = (case Cd.cKind (Cd.cardOf k) == 1 of True -> 2 | False -> 1), cur = 2,
+                   msg = "place {Cd.cName (Cd.cardOf k)}: arrows, enter (up/down: forward or rear)" }.
+pick m =
+  u = Bd.slotOf m.me m.zone m.cur;
+  case Bd.alive u of
+    False -> Md.oops m "empty slot"
+  | True -> { m | sel = Md.SUnit m.zone m.cur, msg = unitHelp m.zone u }.
+unitHelp 2 u = "rear: V advance to the front".
+unitHelp z u | Bd.uKind u == 2 = "artillery: C charge, F fire, R retreat".
+unitHelp z u = "A attack  O overwatch  R retreat".
+
+unitKey m k = case m.sel of
+    Md.SUnit z c -> unitAct m z c k
+  | s -> Md.oops m "select one of your units first".
+unitAct m 1 c 30 = { m | sel = Md.STarget 1 c, zone = 1, cur = c, msg = "target: arrows (up/down: forward, rear, HQ), enter" }.
+unitAct m 1 c 33 = { m | sel = Md.STarget 1 c, zone = 2, cur = c, msg = "aim: arrows, enter (rear units or the HQ)" }.
+unitAct m 1 c 24 = { m | queue = [Md.AOver 0 c], sel = Md.SNone }.
+unitAct m 1 c 19 = { m | queue = [Md.ARetreat 0 c], sel = Md.SNone }.
+unitAct m 1 c 46 = { m | queue = [Md.ACharge 0 c], sel = Md.SNone }.
+unitAct m 2 c 47 = { m | queue = [Md.AAdvance 0 c], sel = Md.SNone }.
+unitAct m z c k = Md.oops m "not that, here".
+aim m 1 c =
+  u = Bd.slotOf m.me 1 c;
+  case Bd.uKind u == 2 of
+    True -> { m | queue = [Md.AFire 0 c m.zone m.cur], sel = Md.SNone, zone = 1, cur = c }
+  | False -> { m | queue = [Md.AAttack 0 1 c m.zone m.cur], sel = Md.SNone, zone = 1, cur = c }.
+aim m z c = { m | sel = Md.SNone }.
+
+# buffered; a live window also sends kind-1 chars (negative codes): ignored
+keyIn m k | k < 0 = (m, Nil).
+keyIn m k = ({ m | keys = m.keys + [k] }, Nil).

@@ -1,0 +1,53 @@
+# ---- the palette: every colour the game uses, named once -------------------------------
+
+unsafe module.
+
+# A dusk board: a cool blue-grey sky and ground, two desaturated factions
+# (a steel blue and a brick red) with one saturated accent (the amber the
+# cursor, the hand's highlight and every "yours" pulse share), and a
+# danger red for what can be hit.  The 3D pass fogs toward `sky` and is
+# lit by `ambient` (cool) plus the warm sun; the 2D layer's ink and
+# paper are the last group.
+white = (1000, 1000, 1000).
+yellow = (1000, 860, 300).           # the accent (amber)
+danger = (960, 360, 300).
+sky = (190, 210, 260).
+skyTop = (110, 130, 190).
+ground = (215, 240, 232).
+groundEdge = (160, 185, 190).
+ambient = (330, 360, 430).
+sun = (900, 840, 720).
+blue = (270, 440, 860).
+blueLight = (520, 640, 940).
+red = (860, 330, 290).
+redLight = (960, 560, 500).
+sideCol 0 = blue.
+sideCol s = red.
+sideLight 0 = blueLight.
+sideLight s = redLight.
+hqCol 0 = (400, 480, 660).
+hqCol s = (660, 420, 400).
+dark = (95, 100, 125).
+khaki = (690, 630, 430).
+shadow = (95, 110, 120).
+tileMine = (350, 385, 372).
+tileTheirs = (385, 345, 360).
+tileRear = (318, 348, 348).
+tileEdge = (430, 470, 480).
+ink = (930, 940, 960).
+inkDim = (600, 630, 700).
+paper = (34, 40, 56).
+paperLit = (62, 74, 108).
+edge = (330, 370, 440).
+# the 2D layer's surfaces: glass (translucent, over the board), chips, bands
+glass = (12, 16, 26, 800).
+glassLit = (34, 44, 66, 860).
+chip = (48, 58, 84).
+blueDark = (30, 54, 104).
+redDark = (104, 36, 42).
+bandInf = (58, 96, 156).
+bandArm = (92, 88, 120).
+bandArt = (150, 84, 58).
+bandSup = (40, 118, 96).
+supCol 0 = (330, 640, 520).
+supCol s = (760, 560, 300).

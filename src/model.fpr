@@ -1,0 +1,82 @@
+# ---- the model: screens, selection, queued actions and the animation in flight ---------
+
+unsafe module.
+
+Pr = use "prelude".
+Cd = use "cards".
+Bd = use "board".
+Sfx = use "mods/sfx".
+
+# ---- the screens ------------------------------------------------------------------
+# One value says what the player is looking at.  title and over stay as
+# facts on the model (the drifting camera, the frozen board) and are kept
+# in step with it at every transition.  Paused, Keys and Stats freeze the
+# tick: animations, the AI and the supply ticker stop; only keys are taken.
+
+scrTitle = 0.
+scrPlay = 1.
+scrPause = 2.
+scrOver = 3.
+scrKeys = 4.
+scrStats = 5.
+scrCards = 6.
+scrTerm = 7.
+
+frozen m = m.screen == scrPause or m.screen == scrKeys or m.screen == scrStats or m.screen == scrCards or m.screen == scrTerm.
+show m scr = { m | back = m.screen, screen = scr }.
+goBack m = { m | screen = m.back }.
+
+# ---- the model --------------------------------------------------------------------
+# sel: SNone | SCard i | SPlace i z | SUnit z c | STarget z c (the attacker)
+# zone: the cursor's zone (0 hand, 1 my fwd, 2 my rear; under STarget 1 enemy
+# fwd, 2 enemy rear, 3 enemy HQ), cur: its index.
+
+Sel = Type (SNone | SCard i | SPlace i z | SUnit z c | STarget z c).
+# actions, queued and played one at a time
+Act = Type (ACall s i z c | AAttack s z c tz tc | AOver s c | ARetreat s c
+          | AAdvance s c | ACharge s c | AFire s c tz tc | AEnd s | AStart s | ABeat).
+# the animation in flight: kind 0 none, 1 lunge, 2 shot, 3 slide, 4 pause
+An = Type (An kind s fz fc tz tc t done).
+noAn = An 0 0 0 0 0 0 0 0.
+# how long each animation runs, ms: 1 lunge, 2 shot, 3 slide, 5 summon (4 is
+# the pause, whose length the queue carries)
+durOf 1 = 520.
+durOf 2 = 700.
+durOf 3 = 360.
+durOf 5 = 400.
+durOf k = 0.
+
+# the model: the two sides and the turn, the selection and the queue, the
+# animation and the visual clock (ms, shake, marks, floating numbers), the
+# profile and the pending disk writes, and the screens' own state.  Only the
+# rules' fields are ever loaded back from the disk (see save).
+initWith s0 s1 =
+  d0 = Cd.shuffle s0 Cd.deckRep;
+  d1 = Cd.shuffle s1 Cd.deckSou;
+  (h0, r0) = Pr.split d0 5 Nil;
+  (h1, r1) = Pr.split d1 5 Nil;
+  { me = Bd.mkSide r0 h0, en = Bd.mkSide r1 h1, turn = 0, tno = 0, env = 0,
+    anim = noAn, queue = Nil, sel = SNone, zone = 0, cur = 0,
+    msg = "arrows, enter, esc; space ends the turn -- press ENTER to begin", keys = Nil,
+    snap = 0, auto = 0, banner = "TERRA II", bt = 100000, seed = 99, over = 0, fx = Nil, ms = 0, log = Nil,
+    sfx = Nil, nums = Nil, shake = 0, title = 1, qt = 0, music = 0, puffs = Nil,
+    ring = (0, 2400), hov = (0, 0), hovT = 1000, marks = Nil, supV = (0, 0), vt = 0,
+    gone = (0 - 1, 1000), dealt = 1000,
+    screen = scrTitle, back = scrTitle, menu = 0, confirm = 0, ccur = (0, 0),
+    prof = profEmpty, fsOn = 0, recs = Nil, called = 0, lostU = 0, kills = 0, dmg = 0,
+    cont = 0, dirty = 0, hs = 0, ss = 0, tin = "", tout = Nil }.
+initModel = initWith 8675309 4242.
+# what the Stats screen starts from before the disk is read
+profEmpty = { played = 0, won = 0, lost = 0, gone = 0, rounds = 0, best = 0, calls = 0, losses = 0, recent = Nil }.
+note m s = { m | msg = s, log = s :: m.log }.
+# a sound cue: queued on the model, played by the tick (like the log)
+cue m r = { m | sfx = r :: m.sfx }.
+oops m s = cue (note m s) Sfx.refuse.
+# a floating number over a spot on the table
+number m pos s = (x, y, z) = pos; { m | nums = (x, z, s, 0) :: m.nums }.
+
+sideName 0 = "you".
+sideName s = "enemy".
+zoneName 1 = "forward".
+zoneName z = "rear".
+

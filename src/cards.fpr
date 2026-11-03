@@ -1,0 +1,79 @@
+# ---- cards: the two factions and what a card is ----------------------------------------
+
+unsafe module.
+
+Pr = use "prelude".
+
+# Card id name cost atk def gen drain kind soft   kind 0 combat, 1 support,
+# 2 artillery.  soft 1 = Soft (ENV bites), 0 = Hard/Structure.  Names are
+# at most 8 glyphs (the card face).
+
+Card = Type (Card id name cost atk def gen drain kind soft).
+
+# Republic VI
+cardOf 0 = Card 0 "Convoy" 2 0 4 1 0 1 0.
+cardOf 1 = Card 1 "Depot" 3 0 5 2 0 1 0.
+cardOf 2 = Card 2 "EngCorps" 3 0 3 0 0 1 1.
+cardOf 3 = Card 3 "Registry" 1 0 2 0 0 1 0.
+cardOf 4 = Card 4 "Conscrpt" 1 1 3 0 0 0 1.
+cardOf 5 = Card 5 "CivDef" 2 2 3 0 0 0 1.
+cardOf 6 = Card 6 "Medic" 2 0 2 0 0 0 1.
+cardOf 7 = Card 7 "LightInf" 2 2 2 0 0 0 1.
+cardOf 8 = Card 8 "Guard" 3 2 4 0 0 0 1.
+cardOf 9 = Card 9 "Recon" 1 1 1 0 0 0 1.
+cardOf 10 = Card 10 "MechInf" 3 3 4 0 1 0 0.
+cardOf 11 = Card 11 "CombArms" 4 4 5 0 1 0 0.
+cardOf 12 = Card 12 "Coilgun" 4 4 2 0 1 2 0.
+cardOf 13 = Card 13 "AirWing" 5 3 3 0 1 0 0.
+cardOf 14 = Card 14 "CmdrJake" 5 2 5 0 0 0 1.
+# Southern Empire
+cardOf 20 = Card 20 "FwdDepot" 2 0 3 1 0 1 0.
+cardOf 21 = Card 21 "WarInd" 4 0 5 1 0 1 0.
+cardOf 22 = Card 22 "Salvage" 2 0 2 0 0 1 1.
+cardOf 23 = Card 23 "ExplPost" 3 0 2 2 0 1 0.
+cardOf 24 = Card 24 "Levy" 1 2 2 0 0 0 1.
+cardOf 25 = Card 25 "Ironclad" 2 2 4 0 0 0 1.
+cardOf 26 = Card 26 "VetSquad" 2 3 2 0 0 0 1.
+cardOf 27 = Card 27 "Grenadr" 3 3 3 0 0 0 1.
+cardOf 28 = Card 28 "Storm" 3 3 2 0 0 0 1.
+cardOf 29 = Card 29 "Commisar" 2 1 3 0 0 0 1.
+cardOf 30 = Card 30 "AsltGun" 3 4 3 0 1 0 0.
+cardOf 31 = Card 31 "Railgun" 4 5 2 0 1 2 0.
+cardOf 32 = Card 32 "IronCol" 4 4 6 0 1 0 0.
+cardOf 33 = Card 33 "HvyArmor" 5 5 7 0 2 0 0.
+cardOf 34 = Card 34 "Maximlan" 5 3 4 0 0 0 1.
+cardOf 35 = Card 35 "Executrs" 5 4 4 0 0 0 1.
+cardOf k = Card k "?" 99 0 1 0 0 0 0.
+
+cName (Card i n co a d g dr k s) = n.
+cCost (Card i n co a d g dr k s) = co.
+cAtk (Card i n co a d g dr k s) = a.
+cDef (Card i n co a d g dr k s) = d.
+cGen (Card i n co a d g dr k s) = g.
+cDrain (Card i n co a d g dr k s) = dr.
+cKind (Card i n co a d g dr k s) = k.
+cSoft (Card i n co a d g dr k s) = s.
+cId (Card i n co a d g dr k s) = i.
+
+# the decks (tactics cut: 34 cards each), as copies of ids
+reps : Int -> (n : Int | measure n) -> List Int .
+reps k n | n <= 0 = Nil.
+reps k n = k :: reps k (n - 1).
+deckRep = reps 0 3 + reps 1 2 + reps 2 2 + reps 3 3 + reps 4 3
+  + reps 5 3 + reps 6 3 + reps 7 3 + reps 8 2 + reps 9 2
+  + reps 10 2 + reps 11 2 + reps 12 2 + reps 13 1 + reps 14 1.
+deckSou = reps 20 3 + reps 21 2 + reps 22 2 + reps 23 2 + reps 24 3
+  + reps 25 3 + reps 26 3 + reps 27 3 + reps 28 2 + reps 29 2
+  + reps 30 2 + reps 31 2 + reps 32 2 + reps 33 1 + reps 34 1 + reps 35 1.
+
+shuffle seed l = l |> shuf seed Nil.
+shuf seed acc Nil = acc.
+shuf seed acc l =
+  s2 = Pr.rnd seed;
+  (x, rest) = Pr.takeAt l (s2 % List.len l);
+  rest |> shuf s2 (x :: acc).
+
+facIds 0 = range 0 14.
+facIds f = range 20 35.
+range a b | a > b = Nil.
+range a b = a :: range (a + 1) b.
