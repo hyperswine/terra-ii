@@ -61,9 +61,13 @@ attack m s c tz tc =
   ok = Ru.canAct u and u.mode == 0 and Bd.uKind u != 2 and Ru.targetOk m s c tz tc;
   case ok of
     False -> Md.oops m "no valid attack there"
-  | True -> Md.cue (Md.note { m | anim = Md.An 1 s 1 c tz tc 0 0, puffs = smoke m.puffs (Bd.muzzle m s c (Bd.aimYaw m s c tz tc)) (case Bd.uSoft u == 1 of True -> 3 | False -> 6) (case Bd.uSoft u == 1 of True -> 0 | False -> 60) }
-                      "{Md.sideName s}: {Cd.cName (Bd.uCard u)} attacks {tgtName tz (tc + 1)}")
-                (case Bd.uSoft u == 1 of True -> Sfx.rifle | False -> Sfx.cannon).
+  | True -> Md.cue (Md.note { m | anim = Md.An 1 s 1 c tz tc 0 0,
+                                  puffs = smoke m.puffs
+                                                (Bd.muzzle m s c (Bd.aimYaw m s c tz tc))
+                                                (case Bd.uSoft u == 1 of True -> 3 | False -> 6)
+                                                (case Bd.uSoft u == 1 of True -> 0 | False -> 60) }
+                                                "{Md.sideName s}: {Cd.cName (Bd.uCard u)} attacks {tgtName tz (tc + 1)}")
+                                                (case Bd.uSoft u == 1 of True -> Sfx.rifle | False -> Sfx.cannon).
 # muzzle smoke: n puffs around a point, held (negative age) until the shot
 smoke ps pos n delay | n == 0 = ps.
 smoke ps pos n delay =
@@ -105,7 +109,7 @@ ageAll m dt =
   { m1 | me = ageSide m.me dt, en = ageSide m.en dt, bt = Int.max 0 (m.bt - dt), fx = ageFx m.fx dt Nil,
          marks = ageMarks m.marks dt Nil, vt = (case m.turn == 1 of True -> Int.min 400 (m.vt + dt) | False -> Int.max 0 (m.vt - dt)),
          gone = ageGone m.gone dt, dealt = Int.min 1000 (m.dealt + dt),
-        nums = ageNums m.nums dt Nil, shake = Int.max 0 (m.shake - dt), puffs = agePuffs m.puffs dt Nil }.
+         nums = ageNums m.nums dt Nil, shake = Int.max 0 (m.shake - dt), puffs = agePuffs m.puffs dt Nil }.
 agePuffs Nil dt acc = acc.
 agePuffs ((x, y, z, t) :: r) dt acc | t + dt > 700 = agePuffs r dt acc.
 agePuffs ((x, y, z, t) :: r) dt acc = agePuffs r dt ((x, y, z, t + dt) :: acc).
