@@ -1,0 +1,123 @@
+# Terra II as its update loop sees it, with no window and no disk: Game.play
+# and Game.step feed keys and ticks through the game's own subscriptions, and
+# the test decides what the disk answers and when
+# (docs/2026-11-12-GAME-MVU.md, step 6).
+unsafe program.
+
+Game = use "std/game".
+Gm = use "../../src/game".
+Sv = use "../../src/save".
+
+app = Game.app Gm.init Gm.update Gm.subs (fn m -> Game.layers 0 0).
+tick = Game.Elapsed Gm.tickMs.
+ticks 0 = Nil.
+ticks n = tick :: ticks (n - 1).
+enter = Game.Key 28.
+check label ok = print (if ok then "ok  {label}" else "FAIL {label}").
+count Nil = 0.
+count (x :: r) = 1 + count r.
+has s Nil = False.
+has s (x :: r) = x == s or has s r.
+sounds Nil = 0.
+sounds (Game.ESound n v :: r) = 1 + sounds r.
+sounds (e :: r) = sounds r.
+tasks Nil = Nil.
+tasks (Game.ETask t f :: r) = t :: tasks r.
+tasks (e :: r) = tasks r.
+appends Nil = 0.
+appends (Game.Append name text :: r) = 1 + appends r.
+appends (t :: r) = appends r.
+replays Nil = 0.
+replays (Game.Replay name :: r) = 1 + replays r.
+replays (t :: r) = replays r.
+
+# a disk that stores everything and holds nothing yet
+disk (Game.Append name text) = Ok "".
+disk (Game.Replay name) = Ok "".
+disk (Game.ReadLatest name) = Err "no record".
+
+# feed inputs with NO disk answers: the model and every effect, tasks left pending
+go m Nil done = (m, done).
+go m (i :: r) done = case Game.step app i m of (m2, es) -> go m2 r (done + es).
+# the game after its two start-up answers: an empty profile, no saved game
+started u =
+  (m0, e0) = Game.start app 0;
+  (m1, e1) = Game.apply app (Gm.GotProfile (Ok "")) m0;
+  (m2, e2) = Game.apply app (Gm.GotGame (Err "no record")) m1;
+  m2.
+headId m = case m.out of Sv.Out id url text note unsure :: r -> id | Nil -> 0.
+headText m = case m.out of Sv.Out id url text note unsure :: r -> text | Nil -> "".
+
+noDisk u =
+  (n, en) = Game.play app 0 (enter :: ticks 120);
+  _ = check "no disk: said so, once" (has "[terra2] profile: no disk, games are not recorded" (Game.logged en));
+  _ = check "no disk: the game still starts" (n.title == 0 and has "[terra2] turn 1 side 0: supply 2 (rate 2)" (Game.logged en));
+  _ = check "no disk: nothing is announced as saved" (not (has "[terra2] game saved: turn 1" (Game.logged en)));
+  _ = check "no disk: nothing waits to be written" (count n.out == 0);
+  (n.tno, n.me.hq, n.en.hq).
+
+withDisk u =
+  (d, ed) = Game.playWith disk app 0 (enter :: ticks 120);
+  _ = check "disk: the profile is reported" (has "[terra2] profile: 0 games (0 won, 0 lost, 0 abandoned)" (Game.logged ed));
+  _ = check "disk: the save is announced once it is confirmed" (has "[terra2] game saved: turn 1" (Game.logged ed));
+  _ = check "disk: everything was acknowledged" (count d.out == 0 and d.busy == 0);
+  _ = check "disk: start event then snapshot, in order" (appends (tasks ed) == 2);
+  ((d.tno, d.me.hq, d.en.hq), sounds ed).
+
+idleSounds u =
+  (q, eq) = Game.playWith disk app 0 (enter :: ticks 320);
+  sounds eq.
+
+# the game three ticks after Enter, with no disk answers: the start event in flight
+sending u = go (started Unit) (enter :: ticks 3) Nil.
+# ... and 120 ticks on: a snapshot queued behind it
+queued u = case sending Unit of (s1, e1) -> go s1 (ticks 120) Nil.
+
+inFlight u =
+  (s1, e1) = sending Unit;
+  _ = check "the start event is sent, and waits" (s1.busy == 1 and count s1.out == 1 and appends (tasks e1) == 1);
+  (s2, e2) = queued Unit;
+  _ = check "a snapshot made meanwhile queues behind it, unsent" (count s2.out == 2 and appends (tasks e2) == 0);
+  (s3, e3) = Game.apply app (Gm.Wrote 999 (Ok "")) s2;
+  check "an answer for another save is ignored" (count s3.out == 2 and s3.busy == 1 and count e3 == 0).
+
+unconfirmed u =
+  (s2, e2) = queued Unit;
+  first = headId s2;
+  (u1, f1) = Game.apply app (Gm.Wrote first (Err "timeout")) s2;
+  _ = check "an unconfirmed profile event is not re-sent" (appends (tasks f1) == 0 and count u1.out == 2);
+  _ = check "the profile is read back instead" (replays (tasks f1) == 1);
+  (u2, f2) = Game.apply app (Gm.Checked first (Ok "{headText s2}\n")) u1;
+  _ = check "found on reading back: acknowledged, never duplicated" (count u2.out == 1 and has "[terra2] save confirmed on reading back" (Game.logged f2));
+  _ = check "and the snapshot behind it goes out" (appends (tasks f2) == 1);
+  (v2, g2) = Game.apply app (Gm.Checked first (Ok "")) u1;
+  check "not found: kept for later, nothing sent now" (count v2.out == 2 and appends (tasks g2) == 0 and v2.wait > 0).
+
+failed u =
+  (s2, e2) = queued Unit;
+  (w1, h1) = Game.apply app (Gm.Wrote (headId s2) (Ok "")) s2;
+  (w2, h2) = Game.apply app (Gm.Wrote (headId w1) (Err "disk full")) w1;
+  _ = check "a failed snapshot is kept" (count w2.out == 1 and w2.busy == 0 and w2.wait > 0);
+  _ = check "and not announced as saved" (not (has "[terra2] game saved: turn 1" (Game.logged h2)));
+  (w3, h3) = go w2 (ticks (Sv.retryTicks + 2)) Nil;
+  _ = check "after the rest it is sent again" (appends (tasks h3) == 1 and w3.busy == 1);
+  (w4, h4) = Game.apply app (Gm.Wrote (headId w3) (Ok "")) w3;
+  check "and announced when it lands" (has "[terra2] game saved: turn 1" (Game.logged h4) and count w4.out == 0).
+
+lateLoad u =
+  (l0, x0) = Game.start app 0;
+  (l1, x1) = Game.apply app (Gm.GotProfile (Ok "")) l0;
+  (l2, x2) = go l1 (enter :: ticks 60) Nil;
+  (l3, x3) = Game.apply app (Gm.GotGame (Ok "terra2 1\ng 1 0 9 0 0 0 0 0\n")) l2;
+  check "a late saved game does not overwrite the new one" (l3.tno == l2.tno and l3.cont == 0).
+
+main =
+  a = noDisk Unit;
+  (b, heard) = withDisk Unit;
+  _ = check "the disk does not change the match" (a == b);
+  _ = check "cues are asked for once: idle ticks add none" (idleSounds Unit == heard);
+  _ = inFlight Unit;
+  _ = unconfirmed Unit;
+  _ = failed Unit;
+  _ = lateLoad Unit;
+  print "terra2 game: done".

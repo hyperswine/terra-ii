@@ -54,11 +54,8 @@
 
 unsafe program.
 
-MV = use "std/mvu".
-Services = use "mods/services".
-EP = use "mods/ep#c66ad65e68dd97f5".
-EC = use "mods/epclient#e09b467f350a5396".
-FS = use "std/fs#84826bc9e8ddb4b5".
+Game = use "std/game".
+Run = use "mods/gamerun".
 Sfx = use "mods/sfx".
 Tank = use "../models/tank/tank".
 Inf = use "../models/infantry/infantry".
@@ -71,84 +68,23 @@ Ac = use "actions".
 Sn = use "scene".
 Ui = use "ui".
 Inp = use "input".
-Sv = use "save".
+Gm = use "game".
 
 models : List (String, String) .
 models = Tank.meshes + Inf.meshes + Truck.meshes + Hq.meshes.
 
-App = MV.App.
-MQuit = MV.MQuit.
-ETick = MV.ETick.
-EKey = MV.EKey.
-STick = MV.STick.
-SKeys = MV.SKeys.
-EWheel = MV.EWheel.
+# ---- the game ----------------------------------------------------------------------------
+# init, update and subs are game.fpr: pure functions over the model, playable
+# with no window (tests/game.fpr). Here: what a frame looks like, and the
+# runner (QOS mods/gamerun) with the window, the meshes, the sound and the disk.
+view m = Game.layers (Sn.scene m) (Ui.ui m).
 
-# ---- the tick ----------------------------------------------------------------------------
+# one cue is a riff of tones; the variation is the game's (the clock, per tone)
+cue riff variation = Sfx.playVar variation riff.
 
-tickMs = 40.
-
-tick m | m.qt > 0 and m.qt <= tickMs = (m, [MQuit]).
-tick m | m.qt > 0 = ({ m | qt = m.qt - tickMs }, Nil).
-tick m | Md.frozen m =
-  (m2, cs) = takeKey { m | ms = m.ms + tickMs, log = Nil, sfx = Nil };
-  _ = say (Pr.rev m2.log Nil);
-  _ = Sfx.playAllVar m2.ms (Pr.rev m2.sfx Nil);
-  (m2, cs).
-tick m =
-  m1 = Ac.ageAll { m | ms = m.ms + tickMs, log = Nil, sfx = Nil } tickMs;
-  Md.An kind s fz fc tz tc t done = m1.anim;
-  (m2, cs) = case kind != 0 of
-    True -> (Ac.advance m1 tickMs, Nil)
-  | False -> idle m1;
-  _ = say (Pr.rev m2.log Nil);
-  _ = Sfx.playAllVar m2.ms (Pr.rev m2.sfx Nil);
-  (m2, cs).
-# the transcript goes straight to stdout: the host's log echo is
-# rate-limited (rings are not), and a scripted game must be readable
-say Nil = 0.
-say (s :: r) = _ = print "[terra2] {s}"; say r.
-idle m = case m.queue of
-    a :: r -> (Ac.startAct { m | queue = r } a, Nil)
-  | Nil -> takeKey m.
-takeKey m = case m.keys of
-    Nil -> (m, Nil)
-  | k :: r -> Inp.key { m | keys = r } k.
-
-# ---- the elm four ---------------------------------------------------------------------------
-
-init env =
-  (me, fs) = env;
-  Sv.loadProf Md.initModel me fs.
-
-update env ev m =
-  (m2, cs) = step ev m;
-  (Sv.flush env m2, cs).
-step ev m = case ev of
-    ETick -> tick m
-  | EKey k -> Inp.keyIn m k
-  | EWheel dy dx -> (Ui.wheel m dy, Nil)
-  | e -> (m, Nil).
-
-subs m = [STick tickMs, SKeys].
-
-view m = (Sn.scene m, Ui.ui m, m.snap).
-
-# Shared and standalone use the same application entry. A supervisor owns
-# the devices; this program owns one graphics session and a Files client.
-run hub gfxTag app =
-  me = myself 0;
-  ep = Services.graphics hub gfxTag models me;
-  (graphics, session) = EC.owner ep;
-  fs = FS.connect me hub.ns;
-  cfg = {env = (me, fs), mt = hub.mt, tick = 160000, input = graphics, render = graphics};
-  result = MV.game me cfg app;
-  _ = EC.close me session;
-  result.
-
-main =
-  hub = Services.withGraphics Services.boot 960 600;
-  run hub "terra2" (App init update subs view).
+main = Run.run { name = "terra2", width = 960, height = 600, meshes = models, frame = 160000,
+                 flags = 0, sound = cue, storage = True }
+               (Game.app Gm.init Gm.update Gm.subs view).
 
 # ---- not in this cut --------------------------------------------------------------------------
 # Tactics cards, every card text (Rally, Last Stand, Breakthrough, Hammer

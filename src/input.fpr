@@ -28,8 +28,7 @@ key m 25 = ({ m | snap = m.snap + 1 }, Nil).
 key m 59 = ({ m | snap = m.snap + 1 }, Nil).
 key m 50 =
   on = 1 - m.music;
-  _ = sndMusic musicFile (on * volNow { m | music = on });
-  ({ m | music = on, msg = (case on == 1 of True -> "music on" | False -> "music off") }, Nil).
+  (Md.tune { m | music = on, msg = (case on == 1 of True -> "music on" | False -> "music off") } (on * volNow { m | music = on }), Nil).
 # the Keys and Stats screens: esc, enter, K or S return
 key m k | m.screen == Md.scrCards = cardsKey m k.
 key m k | m.screen == Md.scrKeys or m.screen == Md.scrStats =
@@ -75,28 +74,24 @@ volNow m | m.screen == Md.scrPause = musicVol / 2.
 volNow m = musicVol.
 
 begin m | m.cont == 1 =
-  _ = sndMusic musicFile musicVol;
-  (Md.cue (Md.note { m | title = 0, screen = Md.scrPlay, bt = 0, queue = Nil, music = 1, cont = 0 } "welcome back: turn {m.tno}") Sfx.open, Nil).
+  (Md.tune (Md.cue (Md.note { m | title = 0, screen = Md.scrPlay, bt = 0, queue = Nil, music = 1, cont = 0 } "welcome back: turn {m.tno}") Sfx.open) musicVol, Nil).
 begin m =
-  _ = sndMusic musicFile musicVol;
-  (Md.cue (Sv.startRec { m | title = 0, screen = Md.scrPlay, bt = 0, queue = [Md.AStart 0], msg = "", music = 1 }) Sfx.open, Nil).
+  (Md.tune (Md.cue (Sv.startRec { m | title = 0, screen = Md.scrPlay, bt = 0, queue = [Md.AStart 0], msg = "", music = 1 }) Sfx.open) musicVol, Nil).
 
 # a fresh deal from the next seed; the profile, the settings and the
 # snapshot counter carry over
 newGame m =
   m2 = Md.initWith (Pr.rnd m.seed) (Pr.rnd (Pr.rnd m.seed));
   m3 = { m2 | title = 0, screen = Md.scrPlay, bt = 0, queue = [Md.AStart 0], msg = "", seed = Pr.rnd m.seed,
-              snap = m.snap, auto = m.auto, music = m.music, prof = m.prof, fsOn = m.fsOn, keys = m.keys };
-  _ = sndMusic musicFile (volNow m3);
-  (Md.cue (Md.note (Sv.startRec m3) "restart: a new game") Sfx.open, Nil).
+              snap = m.snap, auto = m.auto, music = m.music, prof = m.prof, fsOn = m.fsOn, keys = m.keys,
+              mus = m.mus, out = m.out, seq = m.seq, busy = m.busy, wait = m.wait };
+  (Md.tune (Md.cue (Md.note (Sv.startRec m3) "restart: a new game") Sfx.open) (volNow m3), Nil).
 pauseGame m =
   m2 = { m | screen = Md.scrPause, menu = 0, confirm = 0 };
-  _ = sndMusic musicFile (volNow m2);
-  (Md.cue (Md.note m2 "paused") Sfx.toggle, Nil).
+  (Md.tune (Md.cue (Md.note m2 "paused") Sfx.toggle) (volNow m2), Nil).
 resume m =
   m2 = { m | screen = Md.scrPlay, msg = "" };
-  _ = sndMusic musicFile (volNow m2);
-  m2.
+  Md.tune m2 (volNow m2).
 
 # the menu: Resume, Restart (asks first), Stats, Keys, Quit
 pauseKey m 1 | m.confirm == 1 = (Md.cue { m | confirm = 0 } Sfx.cancel, Nil).

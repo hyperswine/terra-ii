@@ -6,7 +6,7 @@ unsafe module.
 Pr = use "prelude".
 Bd = use "board".
 Md = use "model".
-FS = use "std/fs#84826bc9e8ddb4b5".
+Game = use "std/game".
 Core = use "mods/coreutil".
 
 # ---- the profile ------------------------------------------------------------------
@@ -100,50 +100,119 @@ unitOf ns =
           down = Pr.nth ns 5 0, rdy = Pr.nth ns 6 0, chg = Pr.nth ns 7 0, vet = Pr.nth ns 8 0, age = Pr.nth ns 9 0,
           ow = Pr.nth ns 10 0, born = 1000 }.
 
-saveGame m =
-  _ = print "[terra2] game saved: turn {m.tno}";
-  { m | recs = (gameUrl, gameRec m) :: m.recs, dirty = 0 }.
+# the snapshot joins the records; it is announced when the disk confirms it
+saveGame m = { m | recs = (gameUrl, gameRec m) :: m.recs, dirty = 0 }.
 # idle with a turn of yours to keep: the save goes out with the records
 idleNow m =
   Md.An kind s fz fc tz tc t done = m.anim;
   kind == 0 and (case m.queue of Nil -> True | q -> False) and m.over == 0 and m.turn == 0.
 
-# the disk, read at boot and appended to as the game goes
-loadProf m me 0 =
-  _ = print "[terra2] profile: no disk, games are not recorded";
-  { m | fsOn = 0 }.
-loadProf m me fs =
-  r = FS.replay me fs profUrl;
-  p = profOf r;
-  _ = drop r;
-  _ = print "[terra2] profile: {p.played} games ({p.won} won, {p.lost} lost, {p.gone} abandoned)";
-  g = FS.readLatest me fs gameUrl;
-  m2 = gameOf { m | prof = p, fsOn = 1 } g;
-  _ = drop g;
-  _ = announce m2;
-  m2.
-announce m | m.cont == 1 =
-  _ = print "[terra2] a game is waiting: turn {m.tno}";
-  0.
-announce m = 0.
+# ---- the disk: asked for as tasks, answered as messages -------------------------
+# Nothing here touches the disk. init asks for the profile and the saved game
+# (std/game tasks); each answer is a message, and these functions are what
+# update does with it. A game with no disk gets Err "no storage" for both.
+loadTasks toProfile toGame =
+  Game.batch [Game.attempt (Game.replay profUrl) toProfile, Game.attempt (Game.readLatest gameUrl) toGame].
+
+# no disk; or a profile, which may be empty (absent or unreadable: a fresh one)
+gotProfile m (Ok s) = profLine { m | prof = profOf (Ok s), fsOn = 1 }.
+gotProfile m (Err why) | Core.strEq why Game.noStorage =
+  ({ m | fsOn = 0 }, [Game.log "[terra2] profile: no disk, games are not recorded"]).
+gotProfile m (Err why) = profLine { m | prof = Md.profEmpty, fsOn = 1 }.
+profLine m =
+  p = m.prof;
+  (m, [Game.log "[terra2] profile: {p.played} games ({p.won} won, {p.lost} lost, {p.gone} abandoned)"]).
+
+# the saved game is offered only on the title: one that arrives after a game
+# was started does not replace it
+gotGame m r | m.fsOn == 0 = (m, Nil).
+gotGame m r | m.title != 1 = (m, Nil).
+gotGame m r =
+  m2 = gameOf m r;
+  (m2, case m2.cont == 1 of True -> [Game.log "[terra2] a game is waiting: turn {m2.tno}"] | False -> Nil).
 gameOf m (Ok s) = loadGame m s.
 gameOf m (Err e) = m.
 profOf (Ok s) = Core.lines s |> List.fold (fn line p -> profFold p line) Md.profEmpty.
 profOf (Err e) = Md.profEmpty.
 
-flush env m =
+# ---- saves: one at a time, each acknowledged ------------------------------------
+# `recs` is what the turn produced (newest first). flush moves it to `out`, the
+# records the disk has not confirmed, in order, each with an identity; one is
+# in flight at a time (`busy`), and only its acknowledgement removes it, so a
+# record made while a write is running waits its turn and nothing is dropped.
+#
+#   Wrote id (Ok _)    confirmed: the record leaves `out`; a snapshot is
+#                      announced now ("game saved"), not when it was asked for
+#   Wrote id (Err _)   a snapshot replaces what is there, so it is simply kept
+#                      and sent again later. A profile EVENT must not be sent
+#                      twice (it would count a game twice), and a failed reply
+#                      does not say whether it was stored: the record is marked
+#                      unsure and the profile is read back first
+#   Checked id (Ok s)  the profile's last line is the record: confirmed after
+#                      all; otherwise it is not there and may be sent again
+#   an answer for another id is stale (a restart, a retry): ignored
+# After a failure the queue rests for `retryTicks` before it is tried again.
+Out = Type (Out id url text note unsure).
+retryTicks = 250.
+
+flush toWrote toChecked m =
   m1 = case m.dirty == 1 and idleNow m of
     True -> saveGame m
   | False -> m;
-  case m1.recs of
+  m2 = case m1.recs of
     Nil -> m1
-  | rs ->
-    (me, fs) = env;
-    _ = writeAll me fs (Pr.rev rs Nil);
-    { m1 | recs = Nil }.
-writeAll me 0 rs = 0.
-writeAll me fs Nil = 0.
-writeAll me fs ((url, r) :: rest) =
-  h = FS.append me fs url (r + "\n");
-  _ = drop h;
-  writeAll me fs rest.
+  | rs -> (case m1.fsOn == 0 of
+      True -> { m1 | recs = Nil }
+    | False -> queue { m1 | recs = Nil } (Pr.rev rs Nil));
+  pump toWrote toChecked m2.
+queue m Nil = m.
+queue m ((url, text) :: rest) =
+  note = case Core.strEq url gameUrl and not (Core.strEq text "none") of True -> "game saved: turn {m.tno}" | False -> "";
+  queue { m | seq = m.seq + 1, out = m.out + [Out (m.seq + 1) url text note 0] } rest.
+
+# send the head, unless one is in flight or the queue is resting
+pump toWrote toChecked m | m.busy == 1 or m.wait > 0 = (m, Nil).
+pump toWrote toChecked m = case m.out of
+    Nil -> (m, Nil)
+  | Out id url text note unsure :: rest ->
+      (case unsure == 1 of
+        True -> ({ m | busy = 1 }, [Game.attempt (Game.replay profUrl) (toChecked id)])
+      | False -> ({ m | busy = 1 }, [Game.attempt (Game.append url (text + "\n")) (toWrote id)])).
+
+wrote toWrote toChecked m id r = case m.out of
+    Out hid url text note unsure :: rest -> (case hid == id of
+        False -> (m, Nil)
+      | True -> written toWrote toChecked m rest url text note r)
+  | Nil -> (m, Nil).
+written toWrote toChecked m rest url text note (Ok r) =
+  (m2, cs) = pump toWrote toChecked { m | out = rest, busy = 0 };
+  (m2, said note + cs).
+written toWrote toChecked m rest url text note (Err why) | Core.strEq url gameUrl or Core.strEq why Game.noStorage =
+  ({ m | busy = 0, wait = retryTicks }, [Game.log "[terra2] save failed, kept: {why}"]).
+written toWrote toChecked m rest url text note (Err why) =
+  (m2, cs) = pump toWrote toChecked { m | out = unsureHead m.out, busy = 0 };
+  (m2, Game.log "[terra2] save unconfirmed, reading the profile back: {why}" :: cs).
+said "" = Nil.
+said note = [Game.log "[terra2] {note}"].
+unsureHead (Out id url text note unsure :: rest) = Out id url text note 1 :: rest.
+unsureHead Nil = Nil.
+
+checked toWrote toChecked m id r = case m.out of
+    Out hid url text note unsure :: rest -> (case hid == id and unsure == 1 of
+        False -> (m, Nil)
+      | True -> reconciled toWrote toChecked m rest url text note r)
+  | Nil -> (m, Nil).
+reconciled toWrote toChecked m rest url text note (Ok s) | Core.strEq (lastLine (Core.lines s) "") text =
+  (m2, cs) = pump toWrote toChecked { m | out = rest, busy = 0 };
+  (m2, Game.log "[terra2] save confirmed on reading back" :: cs).
+# not there: it may be sent again, after a rest
+reconciled toWrote toChecked m rest url text note (Ok s) =
+  ({ m | out = Out (m.seq + 1) url text note 0 :: rest, seq = m.seq + 1, busy = 0, wait = retryTicks },
+   [Game.log "[terra2] save was not stored, kept"]).
+reconciled toWrote toChecked m rest url text note (Err why) =
+  ({ m | busy = 0, wait = retryTicks }, [Game.log "[terra2] save still unconfirmed: {why}"]).
+lastLine Nil last = last.
+lastLine (l :: r) last = case strlen l == 0 of True -> lastLine r last | False -> lastLine r l.
+# the tick counts the rest down
+rested m | m.wait > 0 = { m | wait = m.wait - 1 }.
+rested m = m.

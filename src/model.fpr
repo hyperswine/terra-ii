@@ -69,7 +69,8 @@ initWith s0 s1 =
     gone = (0 - 1, 1000), dealt = 1000,
     screen = scrTitle, back = scrTitle, menu = 0, confirm = 0, ccur = (0, 0),
     prof = profEmpty, fsOn = 0, recs = Nil, called = 0, lostU = 0, kills = 0, dmg = 0,
-    cont = 0, dirty = 0, hs = 0, ss = 0, tin = "", tout = Nil }.
+    cont = 0, dirty = 0, hs = 0, ss = 0, tin = "", tout = Nil,
+    mus = Nil, out = Nil, seq = 0, busy = 0, wait = 0 }.
 
 initModel = initWith 8675309 4242.
 
@@ -77,8 +78,10 @@ initModel = initWith 8675309 4242.
 profEmpty = { played = 0, won = 0, lost = 0, gone = 0, rounds = 0, best = 0, calls = 0, losses = 0, recent = Nil }.
 note m s = { m | msg = s, log = s :: m.log }.
 
-# a sound cue: queued on the model, played by the tick (like the log)
+# a sound cue: queued on the model, asked for by the transition (like the log)
 cue m r = { m | sfx = r :: m.sfx }.
+# the music's volume from now on: queued the same way, newest first
+tune m v = { m | mus = v :: m.mus }.
 oops m s = cue (note m s) Sfx.refuse.
 
 # a floating number over a spot on the table

@@ -1,0 +1,18 @@
+manifest = 2
+
+[app]
+id = "terra-ii-headless"
+name = "Terra II headless game test"
+version = "1.0.0"
+kind = "app"
+
+[build]
+entry = "game.fpr"
+target = "qos-portable"
+
+[run]
+display = "none"
+disk-mb = 32
+
+[sdk]
+version = "0.3.0"
