@@ -57,6 +57,7 @@ unsafe program.
 MV = use "std/mvu".
 Services = use "mods/services".
 EP = use "mods/ep#c66ad65e68dd97f5".
+EC = use "mods/epclient#e09b467f350a5396".
 FS = use "std/fs#84826bc9e8ddb4b5".
 Sfx = use "mods/sfx".
 Tank = use "../models/tank/tank".
@@ -138,11 +139,11 @@ view m = (Sn.scene m, Ui.ui m, m.snap).
 run hub gfxTag app =
   me = myself 0;
   ep = Services.graphics hub gfxTag models me;
-  (graphics, _) = ep;
+  (graphics, session) = EC.owner ep;
   fs = FS.connect me hub.ns;
   cfg = {env = (me, fs), mt = hub.mt, tick = 160000, input = graphics, render = graphics};
   result = MV.game me cfg app;
-  _ = EP.close me ep;
+  _ = EC.close me session;
   result.
 
 main =
