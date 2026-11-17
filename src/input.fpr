@@ -19,7 +19,7 @@ Sfx = use "mods/sfx".
 # beside the .qa. The bare file name this used to be was found by none of them
 # once the game left QOS, so the music never played. M toggles it.  Original
 # NeoMusic score; source and rebuild notes: models/music/README.md.
-musicFile = "models/music/Skyward_Little_World.mp3".
+musicFile = "models/music/Front_Line.mp3".
 musicVol = 450.
 
 # the terminal takes every key while it is open; T opens it anywhere
