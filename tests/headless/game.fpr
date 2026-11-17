@@ -5,7 +5,18 @@
 unsafe program.
 
 Game = use "std/game".
+AC = use "std/actor".
+Endpoint = use "mods/epservice".
+EP = use "mods/ep".
+EC = use "mods/epclient".
+Files = use "mods/files".
+Wire = use "std/storage".
+IO = use "std/blockio".
+FS = use "std/fs".
+Bd = use "../../src/board".
+Cd = use "../../src/cards".
 Gm = use "../../src/game".
+Ru = use "../../src/rules".
 Sv = use "../../src/save".
 
 app = Game.app Gm.init Gm.update Gm.subs (fn m -> Game.layers 0 0).
@@ -111,6 +122,124 @@ lateLoad u =
   (l3, x3) = Game.apply app (Gm.GotGame (Ok "terra2 1\ng 1 0 9 0 0 0 0 0\n")) l2;
   check "a late saved game does not overwrite the new one" (l3.tno == l2.tno and l3.cont == 0).
 
+latests Nil = 0.
+latests (Game.ELatest k r j f :: more) = 1 + latests more.
+latests (e :: more) = latests more.
+cancels Nil = 0.
+cancels (Game.ECancel k :: more) = 1 + cancels more.
+cancels (e :: more) = cancels more.
+
+tacticalHint u =
+  (m0, e0) = go (started Unit) (enter :: ticks 120) Nil;
+  # place two ready friendly units: Infantry at (1, 2) and charged Artillery at (1, 1)
+  uInf = { (Bd.mkU (Cd.cardOf 1) 0) | ready = 1 };
+  uArt = { (Bd.mkU (Cd.cardOf 3) 0) | ready = 1, chg = 1 };
+  p1 = Bd.setSlot (Bd.setSlot m0.me 1 2 uInf) 1 1 uArt;
+  m1 = { m0 | me = p1, zone = 1, cur = 2 };
+  # select unit at (1, 2): starts hint job
+  (m2, e2) = go m1 [enter, tick] Nil;
+  _ = check "hint: selecting a ready unit submits Latest" (latests e2 == 1 and m2.hintRev > 0);
+  rev1 = m2.hintRev;
+  # visual ticks do not invalidate or restart the search
+  (m3, e3) = go m2 (ticks 5) Nil;
+  _ = check "hint: visual ticks keep revision and do not cancel" (m3.hintRev == rev1 and latests e3 == 0 and cancels e3 == 0);
+  # rapid selection change before job completes: Esc, Left, Enter (one key per tick)
+  (m4, e4) = go m3 [Game.Key 1, tick, Game.Key 105, tick, enter, tick] Nil;
+  _ = check "hint: rapid re-selection advances revision" (m4.hintRev > rev1 and cancels e4 == 1 and latests e4 == 1);
+  q4 = Game.queueJobs e4 (Game.queueJobs e2 Nil);
+  (q5, m5, e5) = Game.drainJobs 10 app q4 m4 Nil;
+  _ = check "hint: replaced search completes with artillery hint" (m5.hint != "" and m5.hintRev == m4.hintRev);
+  # stale completion from rev1 is ignored
+  (m6, e6) = Game.apply app (Gm.GotHint rev1 "hint: stale") m5;
+  _ = check "hint: stale revision cannot overwrite current hint" (m6.hint == m5.hint);
+  # clearing selection cancels and clears hint
+  (m7, e7) = go m6 [Game.Key 1, tick] Nil;
+  check "hint: clearing selection cancels and clears hint" (cancels e7 == 1 and m7.hint == "").
+
+envFlashTest u =
+  (m0, e0) = go (started Unit) (enter :: ticks 120) Nil;
+  uInf = Bd.mkU (Cd.cardOf 1) 0;
+  p1 = Bd.setSlot m0.me 1 2 uInf;
+  mCalm = Ru.endTurn { m0 | me = p1, env = 0, fx = Nil } 0;
+  _ = check "env: no particles when env < 4" (count mCalm.fx == 0);
+  mEnv = Ru.endTurn { m0 | me = p1, env = 10, fx = Nil } 0;
+  _ = check "env: flashes field particles on ENV damage" (count mEnv.fx == 28);
+  (mAged, ea) = go mEnv (ticks 12) Nil;
+  check "env: field particles clear after flash duration" (count mAged.fx == 0).
+
+# ---- real-disk persistence and failure paths (against Files.qa + --disk) ----
+runFs me fs (Game.Replay name) = FS.replay me fs name.
+runFs me fs (Game.ReadLatest name) = FS.readLatest me fs name.
+runFs me fs (Game.Append name text) = FS.append me fs name text.
+
+isErr (Err _) = True.
+isErr (Ok _) = False.
+
+settleReal : Int -> Int -> (fuel : Int | measure fuel) -> model -> List Game.Effect -> List Game.Effect -> (model, List Game.Effect) .
+settleReal me fs fuel m es done = case es of
+    Nil -> (m, done)
+  | Game.ETask task toMsg :: more ->
+      if fuel <= 0 then (m, done)
+      else
+        res = runFs me fs task;
+        (m2, es2) = Game.apply app (toMsg res) m;
+        settleReal me fs (fuel - 1) m2 (es2 + more) (done + [Game.ETask task toMsg])
+  | e :: more ->
+      if fuel <= 0 then (m, done)
+      else settleReal me fs (fuel - 1) m more (done + [e]).
+
+playReal me fs m Nil done = (m, done).
+playReal me fs m (i :: more) done =
+  (m1, es1) = Game.step app i m;
+  (m2, es2) = settleReal me fs 64 m1 es1 Nil;
+  playReal me fs m2 more (done + es2).
+
+unsupported q = Err "block: unsupported".
+bootDisk me =
+  hart = if Sys.harts Unit > 1 then 1 else 0;
+  ns = AC.spawnWith (AC.Dynamic 64) Endpoint.namespace;
+  _ = EP.register me ns "/" (AC.spawnWith (AC.Dynamic 64) (Endpoint.lister ns));
+  dev = device "blk";
+  disk = IO.serveWithOn hart me dev unsupported unsupported;
+  store = case FS.startBlockOn hart me disk of Ok s -> s | Err why -> error why;
+  _ = EP.register me ns "/services/files" (Wire.spawn 8 Wire.inboxBytes (Files.serve store));
+  (ns, store, disk).
+
+realDisk u =
+  me = myself 0;
+  (ns, store, disk) = bootDisk me;
+  fs = FS.connect me ns;
+  # 1. Fresh real disk: boot, start game, save turn 1
+  (m0, e0) = Game.start app 0;
+  (m1, es1) = settleReal me fs 32 m0 e0 Nil;
+  _ = check "real disk: boot reports empty profile" (m1.fsOn == 1 and m1.prof.played == 0 and m1.cont == 0);
+  (m2, es2) = playReal me fs m1 (enter :: ticks 120) Nil;
+  _ = check "real disk: turn 1 saved and acknowledged" (count m2.out == 0 and has "[terra2] game saved: turn 1" (Game.logged es2));
+  # 2. Second boot on the same real disk: profile + saved game loaded
+  (r0, re0) = Game.start app 0;
+  (r1, res1) = settleReal me fs 32 r0 re0 Nil;
+  _ = check "real disk: second boot loads profile and waiting game" (r1.prof.played == 1 and r1.prof.gone == 1 and r1.cont == 1 and r1.tno == 1);
+  # 3. Corrupt snapshot on real disk: ignored cleanly without crashing
+  _ = FS.append me fs Sv.gameUrl "corrupt\n";
+  (c0, ce0) = Game.start app 0;
+  (c1, ces1) = settleReal me fs 32 c0 ce0 Nil;
+  _ = check "real disk: corrupt snapshot ignored cleanly" (c1.cont == 0 and c1.fsOn == 1);
+  # 4. Kill Files.qa owner to force real FS Err on append and replay
+  status = case EC.open me ns "/services/files/status" "read" of Ok ep -> ep | Err why -> error why;
+  (owner, opened) = EC.owner status;
+  _ = kill owner;
+  _ = EC.close me opened;
+  deadRes = FS.append me fs Sv.profUrl "probe\n";
+  _ = check "real disk: dead Files service returns Err" (isErr deadRes);
+  # Step game into start + turn 1 save against the failing real disk
+  (s1, se1) = go (started Unit) (enter :: ticks 120) Nil;
+  (s2, ses2) = settleReal me fs 32 s1 se1 Nil;
+  _ = check "real disk: failed profile/snapshot write kept in out and waiting" (count s2.out > 0 and s2.wait == Sv.retryTicks and not (has "[terra2] game saved: turn 1" (Game.logged ses2)));
+  # Exercise snapshot-only failure against real dead Files service
+  (sn1, sne1) = Game.apply app (Gm.Wrote (headId s1) (Ok "")) s1;
+  (sn2, snes2) = settleReal me fs 32 sn1 sne1 Nil;
+  check "real disk: failed snapshot write kept with retry wait" (count sn2.out == 1 and sn2.busy == 0 and sn2.wait == Sv.retryTicks and not (has "[terra2] game saved: turn 1" (Game.logged snes2))).
+
 main =
   a = noDisk Unit;
   (b, heard) = withDisk Unit;
@@ -120,4 +249,7 @@ main =
   _ = unconfirmed Unit;
   _ = failed Unit;
   _ = lateLoad Unit;
+  _ = tacticalHint Unit;
+  _ = envFlashTest Unit;
+  _ = realDisk Unit;
   print "terra2 game: done".

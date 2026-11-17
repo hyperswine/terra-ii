@@ -149,13 +149,26 @@ draw m s p = case p.deck of
   | k :: r -> drawn (case s == 0 of True -> { m | dealt = 0 } | False -> m) s { p | deck = r, hand = p.hand + [k] }.
 drawn m s p = (p, Bd.setSide m s p).
 
+# NOTE (balance, 2026-11-17): ENV damage feels like it is scaling too fast right now
+# (every unit death adds +1/+2 ENV up to 10, and both sides tick ENV damage at endTurn).
 endTurn m s =
   p = Bd.sideOf m s;
   p1 = { p | fwd = envRow p.fwd m.env, rear = envRow p.rear m.env, hand = trim p.hand 7 };
-  m1 = Bd.setSide m s p1;
+  hits = envHits p.fwd m.env + envHits p.rear m.env;
+  fx1 = case hits > 0 of True -> envFlash m.fx (m.tno * 17 + s * 7 + m.env) 28 | False -> m.fx;
+  m1 = Bd.setSide { m | fx = fx1 } s p1;
   m2 = collect m1 s 1 0;
   m3 = collect m2 s 2 0;
   { m3 | queue = [Md.AStart (1 - s)], sel = Md.SNone }.
+envHits row env | env >= 10 = row |> List.fold (fn u n -> n + Pr.bi (Bd.alive u)) 0.
+envHits row env | env >= 4 = row |> List.fold (fn u n -> n + Pr.bi (Bd.alive u and Bd.uSoft u == 1)) 0.
+envHits row env = 0.
+envFlash fx seed n | n == 0 = fx.
+envFlash fx seed n =
+  x = ((n * 1973 + seed * 337) % 10400 + 10400) % 10400 - 5200;
+  y = 400 + ((n * 997 + seed * 191) % 1200 + 1200) % 1200;
+  z = ((n * 2713 + seed * 431) % 11000 + 11000) % 11000 - 5500;
+  envFlash ((x, y, z, 0) :: fx) seed (n - 1).
 envRow row env | env >= 10 = envAll row.
 envRow row env | env >= 4 = envSoft row.
 envRow row env = row.

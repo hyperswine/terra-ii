@@ -87,3 +87,73 @@ aiArt m c u =
 richest Nil i best bg = best.
 richest (u :: r) i best bg | Bd.alive u and Cd.cGen (Bd.uCard u) > bg = richest r (i + 1) i (Cd.cGen (Bd.uCard u)).
 richest (u :: r) i best bg = richest r (i + 1) best bg.
+
+# ---- tactical hint for the player's selected unit (replaceable chunked search) --------
+Game = use "std/game".
+
+hintJob m z c = Game.job (fn u -> (hintCands m z c, 0 - 1, "")) hintStep.
+
+hintStep st =
+  (cands, best, lbl) = st;
+  hintChunk 2 cands best lbl.
+
+hintChunk 0 Nil best lbl = Game.done (if lbl == "" then "" else "hint: {lbl}").
+hintChunk 0 cands best lbl = Game.more (cands, best, lbl).
+hintChunk n Nil best lbl = Game.done (if lbl == "" then "" else "hint: {lbl}").
+hintChunk n ((s, l) :: more) best lbl =
+  if s > best then hintChunk (n - 1) more s l
+  else hintChunk (n - 1) more best lbl.
+
+hintCands m z c =
+  u = Bd.slotOf m.me z c;
+  case Ru.canAct u of
+    False -> Nil
+  | True -> (case z == 2 of
+      True -> (case Bd.uKind u != 1 and not (Bd.occ m.me 1 c) of
+          True -> [(45, "advance to front (V)")]
+        | False -> Nil)
+    | False -> (case Bd.uKind u == 2 of
+        True -> hintArt m c u
+      | False -> hintFwd m c u)).
+
+hintArt m c u | u.chg == 0 = [(50, "charge artillery (C)")].
+hintArt m c u =
+  hqScore = 40 + u.atk * 3 + (if m.en.hq <= u.atk then 500 else 0);
+  retreat = if not (Bd.occ m.me 2 c) then [(10, "retreat to rear (R)")] else Nil;
+  hintFireCands m u 0 ((hqScore, "fire at enemy HQ (F)") :: retreat).
+
+hintFireCands m u tc acc | tc > 4 = acc.
+hintFireCands m u tc acc =
+  acc2 = case Ru.fireOk m 0 2 tc of
+    False -> acc
+  | True ->
+      eu = Bd.slotOf m.en 2 tc;
+      sc = 60 + Cd.cGen (Bd.uCard eu) * 25 + (if eu.hp <= u.atk then 40 else 0);
+      (sc, "fire at rear {tc + 1} ({Cd.cName (Bd.uCard eu)}) (F)") :: acc;
+  hintFireCands m u (tc + 1) acc2.
+
+hintFwd m c u =
+  base = (if u.mode == 0 then [(25, "overwatch (O)")] else Nil) +
+         (if not (Bd.occ m.me 2 c) then [(10, "retreat to rear (R)")] else Nil);
+  case u.mode == 0 of
+    False -> base
+  | True -> hintAtkCands m c u (Int.max 0 (c - 1)) (Int.min 4 (c + 1)) base.
+
+hintAtkCands m c u tc hi acc | tc > hi = acc.
+hintAtkCands m c u tc hi acc =
+  a1 = case Ru.targetOk m 0 c 3 tc of
+    False -> acc
+  | True -> (100 + u.atk * 4 + (if m.en.hq <= u.atk then 500 else 0), "attack enemy HQ (A)") :: acc;
+  a2 = case Ru.targetOk m 0 c 2 tc of
+    False -> a1
+  | True ->
+      eu2 = Bd.slotOf m.en 2 tc;
+      sc2 = 70 + Cd.cGen (Bd.uCard eu2) * 20 + (if eu2.hp <= u.atk then 45 else 0);
+      (sc2, "attack rear {tc + 1} ({Cd.cName (Bd.uCard eu2)}) (A)") :: a1;
+  a3 = case Ru.targetOk m 0 c 1 tc of
+    False -> a2
+  | True ->
+      eu1 = Bd.slotOf m.en 1 tc;
+      sc1 = 40 + eu1.atk * 5 + (if eu1.hp <= u.atk then 45 else 0);
+      (sc1, "attack fwd {tc + 1} ({Cd.cName (Bd.uCard eu1)}) (A)") :: a2;
+  hintAtkCands m c u (tc + 1) hi a3.

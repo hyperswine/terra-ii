@@ -14,6 +14,9 @@ O = use "std/option".
 Pr = use "prelude".
 Md = use "model".
 Ac = use "actions".
+Ai = use "ai".
+Bd = use "board".
+Ru = use "rules".
 Ui = use "ui".
 Inp = use "input".
 Sv = use "save".
@@ -21,8 +24,8 @@ Sv = use "save".
 # Tick: 40 ms of game time.  KeyIn / Wheel: the player.  The rest are answers
 # from the disk: the profile and the saved game at start, and each save's
 # acknowledgement (Wrote) or, after an unconfirmed one, the profile read back
-# (Checked), by the save's identity.
-Msg = Type (Tick | KeyIn k | Wheel dy | GotProfile r | GotGame r | Wrote id r | Checked id r).
+# (Checked), by the save's identity.  GotHint carries the hint job's revision.
+Msg = Type (Tick | KeyIn k | Wheel dy | GotProfile r | GotGame r | Wrote id r | Checked id r | GotHint rev res).
 
 tickMs = 40.
 musicFile = Inp.musicFile.
@@ -33,7 +36,8 @@ update msg m =
   (m1, cs) = step msg m;
   (m2, tunes) = tuned m1;
   (m3, saves) = Sv.flush Wrote Checked m2;
-  (m3, Game.batch (tunes + cs + captured m m3 + saves)).
+  (m4, hints) = syncHint m msg m3;
+  (m4, Game.batch (tunes + cs + captured m m4 + saves + hints)).
 
 step Tick m = tick (Sv.rested m).
 step (KeyIn k) m = Inp.keyIn m k.
@@ -42,6 +46,34 @@ step (GotProfile r) m = Sv.gotProfile m r.
 step (GotGame r) m = Sv.gotGame m r.
 step (Wrote id r) m = Sv.wrote Wrote Checked m id r.
 step (Checked id r) m = Sv.checked Wrote Checked m id r.
+step (GotHint rev res) m =
+  if rev == m.hintRev and hintActive m then ({ m | hint = res }, Nil)
+  else (m, Nil).
+
+hintActive m =
+  m.title == 0 and m.over == 0 and m.screen == Md.scrPlay and m.turn == 0 and
+  (case m.sel of Md.SUnit z c -> Ru.canAct (Bd.slotOf m.me z c) | s -> False).
+
+sameHintInput a b =
+  a.title == b.title and a.over == b.over and a.screen == b.screen and
+  a.turn == b.turn and a.sel == b.sel and
+  sideKey a.me == sideKey b.me and sideKey a.en == sideKey b.en.
+
+sideKey p = (p.hq, rowKey p.fwd, rowKey p.rear).
+rowKey row = row |> List.map (fn u -> (u.dead, u.hp, u.atk, u.ready, u.mode, u.chg, u.down, u.id)).
+
+syncHint m (GotHint rev res) m3 = (m3, Nil).
+syncHint m msg m3 | sameHintInput m m3 = (m3, Nil).
+syncHint m msg m3 = case hintActive m3 of
+    True -> (case m3.sel of
+        Md.SUnit z c ->
+          r = m3.hintRev + 1;
+          ({ m3 | hintRev = r, hint = "" }, [Game.latest "hint" r (Ai.hintJob m3 z c) GotHint])
+      | s -> (m3, Nil))
+  | False ->
+      if hintActive m or m3.hint != "" then
+        ({ m3 | hintRev = m3.hintRev + 1, hint = "" }, [Game.cancel "hint"])
+      else (m3, Nil).
 
 # ---- the tick ----------------------------------------------------------------------------
 # The rules and the input handlers queue their words (m.log) and their cues

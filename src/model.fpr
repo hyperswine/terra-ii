@@ -70,7 +70,8 @@ initWith s0 s1 =
     screen = scrTitle, back = scrTitle, menu = 0, confirm = 0, ccur = (0, 0),
     prof = profEmpty, fsOn = 0, recs = Nil, called = 0, lostU = 0, kills = 0, dmg = 0,
     cont = 0, dirty = 0, hs = 0, ss = 0, tin = "", tout = Nil,
-    mus = Nil, out = Nil, seq = 0, busy = 0, wait = 0 }.
+    mus = Nil, out = Nil, seq = 0, busy = 0, wait = 0,
+    hintRev = 0, hint = "" }.
 
 initModel = initWith 8675309 4242.
 

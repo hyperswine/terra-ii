@@ -84,7 +84,8 @@ newGame m =
   m2 = Md.initWith (Pr.rnd m.seed) (Pr.rnd (Pr.rnd m.seed));
   m3 = { m2 | title = 0, screen = Md.scrPlay, bt = 0, queue = [Md.AStart 0], msg = "", seed = Pr.rnd m.seed,
               snap = m.snap, auto = m.auto, music = m.music, prof = m.prof, fsOn = m.fsOn, keys = m.keys,
-              mus = m.mus, out = m.out, seq = m.seq, busy = m.busy, wait = m.wait };
+              mus = m.mus, out = m.out, seq = m.seq, busy = m.busy, wait = m.wait,
+              hintRev = m.hintRev + 1, hint = "" };
   (Md.tune (Md.cue (Md.note (Sv.startRec m3) "restart: a new game") Sfx.open) (volNow m3), Nil).
 pauseGame m =
   m2 = { m | screen = Md.scrPause, menu = 0, confirm = 0 };

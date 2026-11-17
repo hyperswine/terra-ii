@@ -281,7 +281,13 @@ panelFor m s z c u =
            [tE 12 Pl.inkDim 226 "{Md.zoneName z} {c + 1}   {mode}{vetTag u}{readyTag u}",
             Box [Row, Gap 8] (statChips cd u),
             lbl 11 Pl.inkDim "drain {Cd.cDrain cd}   call {Cd.cCost cd}",
+            panelHint m s z c,
             panelHelp m s z u]].
+panelHint m 0 z c | m.hint != "" =
+  case m.sel of
+      Md.SUnit sz sc -> if sz == z and sc == c then tE 11 Pl.yellow 226 m.hint else spacer 1
+    | s -> spacer 1.
+panelHint m s z c = spacer 1.
 statChips cd u | Cd.cKind cd == 1 = [chipOf "GEN" "+{Cd.cGen cd}", chipOf "HP" "{u.hp}/{Bd.uMax u}"].
 statChips cd u = [chipOf "ATK" "{u.atk}", chipOf "HP" "{u.hp}/{Bd.uMax u}"].
 chipOf cap v =
