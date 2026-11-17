@@ -252,8 +252,33 @@ bannerBox m | m.bt > 0 =
   centred (Box [Row, Pad 14, Round 14, Bga Pl.glass] [lbl em Pl.yellow m.banner]).
 bannerBox m = spacer 1.
 
-# the unit panel: whatever the cursor or the selection is on
-panel m = panelOf m (panelUnit m).
+# the unit panel: whatever the cursor or the selection is on. A card in the
+# hand (under the cursor, or picked up and being placed) gets the card panel.
+panel m = case handCard m of
+    i -> (case i >= 0 of True -> cardPanelOf m i | False -> panelOf m (panelUnit m)).
+handCard m = case m.sel of
+    Md.SPlace i z -> i
+  | Md.SNone -> (case m.zone == 0 and m.cur < List.len m.me.hand of True -> m.cur | False -> 0 - 1)
+  | s -> 0 - 1.
+cardPanelOf m i = case Pr.nth m.me.hand i (0 - 1) of
+    k -> (case k < 0 of True -> spacer 1 | False -> Box [Col] [cardPanel m (Cd.cardOf k), grow]).
+cardPanel m cd =
+  k = Mo.easeOut (Mo.clampK (m.hovT * 1000 / 220));
+  afford = m.me.stock >= Cd.cCost cd;
+  placing = (case m.sel of Md.SPlace i z -> True | s -> False);
+  Box [Col, W 250, Pad 6, Gap 8, Round 12, Shadow, Bga (mixA Pl.glass Pl.glassLit (1000 - k)), Bord Pl.yellow]
+      [Box [Row, Pad 8, Gap 8, Round 8, Bg (bandOf cd), Mid]
+           [tE 17 Pl.white 150 (Cd.cName cd), grow, lbl 11 (mixC Pl.white (bandOf cd) 300) "IN HAND"],
+       Box [Col, Pad 4, Gap 8]
+           [tE 12 Pl.inkDim 226 "{kindName cd}   call {Cd.cCost cd}   drain {Cd.cDrain cd}",
+            Box [Row, Gap 8] (cardChips cd),
+            tE 11 (case afford of True -> Pl.inkDim | False -> Pl.danger) 226
+              (case afford of True -> "supply {m.me.stock}: you can call it" | False -> "needs {Cd.cCost cd} supply, you have {m.me.stock}"),
+            (case placing of
+               True -> helpLines [keyLineW 44 "enter" "call it here", keyLineW 44 "esc" "put it back"]
+             | False -> helpLines [keyLineW 44 "enter" "pick it up", keyLineW 44 "esc" "back"])]].
+cardChips cd | Cd.cKind cd == 1 = [chipOf "GEN" "+{Cd.cGen cd}", chipOf "DEF" "{Cd.cDef cd}"].
+cardChips cd = [chipOf "ATK" "{Cd.cAtk cd}", chipOf "DEF" "{Cd.cDef cd}"].
 panelOf m (s, z, c) | s < 0 = spacer 1.
 panelOf m (s, z, c) = Box [Col] [panelFor m s z c (Bd.slotOf (Bd.sideOf m s) z c), grow].
 panelUnit m = case m.sel of

@@ -14,10 +14,12 @@ Sv = use "save".
 Tm = use "terminal".
 Sfx = use "mods/sfx".
 
-# the track beside the .qa (`#: music` above: run points FPR_ASSETS at it,
-# pack copies it into the bundle); M toggles it.  Original NeoMusic score;
-# source and rebuild notes: models/music/README.md.
-musicFile = "Skyward_Little_World.mp3".
+# The track, by its path in this repository: the host tries the path as given
+# (relative to where `qos run` starts, the project root), then FPR_ASSETS, then
+# beside the .qa. The bare file name this used to be was found by none of them
+# once the game left QOS, so the music never played. M toggles it.  Original
+# NeoMusic score; source and rebuild notes: models/music/README.md.
+musicFile = "models/music/Skyward_Little_World.mp3".
 musicVol = 450.
 
 # the terminal takes every key while it is open; T opens it anywhere

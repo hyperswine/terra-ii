@@ -2,7 +2,7 @@
   "passed": true,
   "runner": "Sol",
   "checks": [
-    "headless game through std/game (disk, no disk, save acknowledgements, late load)",
+    "headless game through std/game (disk, no disk, save acknowledgements, late load, tactical hint, real-disk failures)",
     "original 3D title",
     "new game",
     "cursor/card/turn input",
