@@ -18,6 +18,7 @@ Cd = use "../../src/cards".
 Gm = use "../../src/game".
 Ru = use "../../src/rules".
 Sv = use "../../src/save".
+List = use "std/list".
 
 app = Game.app Gm.init Gm.update Gm.subs (fn m -> Game.layers 0 0).
 tick = Game.Elapsed Gm.tickMs.
@@ -25,8 +26,6 @@ ticks 0 = Nil.
 ticks n = tick :: ticks (n - 1).
 enter = Game.Key 28.
 check label ok = print (if ok then "ok  {label}" else "FAIL {label}").
-count Nil = 0.
-count (x :: r) = 1 + count r.
 has s Nil = False.
 has s (x :: r) = x == s or has s r.
 sounds Nil = 0.
@@ -64,14 +63,14 @@ noDisk u =
   _ = check "no disk: said so, once" (has "[terra2] profile: no disk, games are not recorded" (Game.logged en));
   _ = check "no disk: the game still starts" (n.title == 0 and has "[terra2] turn 1 side 0: supply 2 (rate 2)" (Game.logged en));
   _ = check "no disk: nothing is announced as saved" (not (has "[terra2] game saved: turn 1" (Game.logged en)));
-  _ = check "no disk: nothing waits to be written" (count n.out == 0);
+  _ = check "no disk: nothing waits to be written" (List.length n.out == 0);
   (n.tno, n.me.hq, n.en.hq).
 
 withDisk u =
   (d, ed) = Game.playWith disk app 0 (enter :: ticks 120);
   _ = check "disk: the profile is reported" (has "[terra2] profile: 0 games (0 won, 0 lost, 0 abandoned)" (Game.logged ed));
   _ = check "disk: the save is announced once it is confirmed" (has "[terra2] game saved: turn 1" (Game.logged ed));
-  _ = check "disk: everything was acknowledged" (count d.out == 0 and d.busy == 0);
+  _ = check "disk: everything was acknowledged" (List.length d.out == 0 and d.busy == 0);
   _ = check "disk: start event then snapshot, in order" (appends (tasks ed) == 2);
   ((d.tno, d.me.hq, d.en.hq), sounds ed).
 
@@ -86,34 +85,34 @@ queued u = case sending Unit of (s1, e1) -> go s1 (ticks 120) Nil.
 
 inFlight u =
   (s1, e1) = sending Unit;
-  _ = check "the start event is sent, and waits" (s1.busy == 1 and count s1.out == 1 and appends (tasks e1) == 1);
+  _ = check "the start event is sent, and waits" (s1.busy == 1 and List.length s1.out == 1 and appends (tasks e1) == 1);
   (s2, e2) = queued Unit;
-  _ = check "a snapshot made meanwhile queues behind it, unsent" (count s2.out == 2 and appends (tasks e2) == 0);
+  _ = check "a snapshot made meanwhile queues behind it, unsent" (List.length s2.out == 2 and appends (tasks e2) == 0);
   (s3, e3) = Game.apply app (Gm.Wrote 999 (Ok "")) s2;
-  check "an answer for another save is ignored" (count s3.out == 2 and s3.busy == 1 and count e3 == 0).
+  check "an answer for another save is ignored" (List.length s3.out == 2 and s3.busy == 1 and List.length e3 == 0).
 
 unconfirmed u =
   (s2, e2) = queued Unit;
   first = headId s2;
   (u1, f1) = Game.apply app (Gm.Wrote first (Err "timeout")) s2;
-  _ = check "an unconfirmed profile event is not re-sent" (appends (tasks f1) == 0 and count u1.out == 2);
+  _ = check "an unconfirmed profile event is not re-sent" (appends (tasks f1) == 0 and List.length u1.out == 2);
   _ = check "the profile is read back instead" (replays (tasks f1) == 1);
   (u2, f2) = Game.apply app (Gm.Checked first (Ok "{headText s2}\n")) u1;
-  _ = check "found on reading back: acknowledged, never duplicated" (count u2.out == 1 and has "[terra2] save confirmed on reading back" (Game.logged f2));
+  _ = check "found on reading back: acknowledged, never duplicated" (List.length u2.out == 1 and has "[terra2] save confirmed on reading back" (Game.logged f2));
   _ = check "and the snapshot behind it goes out" (appends (tasks f2) == 1);
   (v2, g2) = Game.apply app (Gm.Checked first (Ok "")) u1;
-  check "not found: kept for later, nothing sent now" (count v2.out == 2 and appends (tasks g2) == 0 and v2.wait > 0).
+  check "not found: kept for later, nothing sent now" (List.length v2.out == 2 and appends (tasks g2) == 0 and v2.wait > 0).
 
 failed u =
   (s2, e2) = queued Unit;
   (w1, h1) = Game.apply app (Gm.Wrote (headId s2) (Ok "")) s2;
   (w2, h2) = Game.apply app (Gm.Wrote (headId w1) (Err "disk full")) w1;
-  _ = check "a failed snapshot is kept" (count w2.out == 1 and w2.busy == 0 and w2.wait > 0);
+  _ = check "a failed snapshot is kept" (List.length w2.out == 1 and w2.busy == 0 and w2.wait > 0);
   _ = check "and not announced as saved" (not (has "[terra2] game saved: turn 1" (Game.logged h2)));
   (w3, h3) = go w2 (ticks (Sv.retryTicks + 2)) Nil;
   _ = check "after the rest it is sent again" (appends (tasks h3) == 1 and w3.busy == 1);
   (w4, h4) = Game.apply app (Gm.Wrote (headId w3) (Ok "")) w3;
-  check "and announced when it lands" (has "[terra2] game saved: turn 1" (Game.logged h4) and count w4.out == 0).
+  check "and announced when it lands" (has "[terra2] game saved: turn 1" (Game.logged h4) and List.length w4.out == 0).
 
 lateLoad u =
   (l0, x0) = Game.start app 0;
@@ -161,11 +160,11 @@ envFlashTest u =
   uInf = Bd.mkU (Cd.cardOf 1) 0;
   p1 = Bd.setSlot m0.me 1 2 uInf;
   mCalm = Ru.endTurn { m0 | me = p1, env = 0, fx = Nil } 0;
-  _ = check "env: no particles when env < 4" (count mCalm.fx == 0);
+  _ = check "env: no particles when env < 4" (List.length mCalm.fx == 0);
   mEnv = Ru.endTurn { m0 | me = p1, env = 10, fx = Nil } 0;
-  _ = check "env: flashes field particles on ENV damage" (count mEnv.fx == 28);
+  _ = check "env: flashes field particles on ENV damage" (List.length mEnv.fx == 28);
   (mAged, ea) = go mEnv (ticks 12) Nil;
-  check "env: field particles clear after flash duration" (count mAged.fx == 0).
+  check "env: field particles clear after flash duration" (List.length mAged.fx == 0).
 
 # ---- real-disk persistence and failure paths (against Files.qa + --disk) ----
 runFs me fs (Game.Replay name) = FS.replay me fs name.
@@ -214,7 +213,7 @@ realDisk u =
   (m1, es1) = settleReal me fs 32 m0 e0 Nil;
   _ = check "real disk: boot reports empty profile" (m1.fsOn == 1 and m1.prof.played == 0 and m1.cont == 0);
   (m2, es2) = playReal me fs m1 (enter :: ticks 120) Nil;
-  _ = check "real disk: turn 1 saved and acknowledged" (count m2.out == 0 and has "[terra2] game saved: turn 1" (Game.logged es2));
+  _ = check "real disk: turn 1 saved and acknowledged" (List.length m2.out == 0 and has "[terra2] game saved: turn 1" (Game.logged es2));
   # 2. Second boot on the same real disk: profile + saved game loaded
   (r0, re0) = Game.start app 0;
   (r1, res1) = settleReal me fs 32 r0 re0 Nil;
@@ -234,11 +233,11 @@ realDisk u =
   # Step game into start + turn 1 save against the failing real disk
   (s1, se1) = go (started Unit) (enter :: ticks 120) Nil;
   (s2, ses2) = settleReal me fs 32 s1 se1 Nil;
-  _ = check "real disk: failed profile/snapshot write kept in out and waiting" (count s2.out > 0 and s2.wait == Sv.retryTicks and not (has "[terra2] game saved: turn 1" (Game.logged ses2)));
+  _ = check "real disk: failed profile/snapshot write kept in out and waiting" (List.length s2.out > 0 and s2.wait == Sv.retryTicks and not (has "[terra2] game saved: turn 1" (Game.logged ses2)));
   # Exercise snapshot-only failure against real dead Files service
   (sn1, sne1) = Game.apply app (Gm.Wrote (headId s1) (Ok "")) s1;
   (sn2, snes2) = settleReal me fs 32 sn1 sne1 Nil;
-  check "real disk: failed snapshot write kept with retry wait" (count sn2.out == 1 and sn2.busy == 0 and sn2.wait == Sv.retryTicks and not (has "[terra2] game saved: turn 1" (Game.logged snes2))).
+  check "real disk: failed snapshot write kept with retry wait" (List.length sn2.out == 1 and sn2.busy == 0 and sn2.wait == Sv.retryTicks and not (has "[terra2] game saved: turn 1" (Game.logged snes2))).
 
 main =
   a = noDisk Unit;
