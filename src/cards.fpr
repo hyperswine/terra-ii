@@ -73,12 +73,24 @@ deckSou = reps 20 3 + reps 21 2 + reps 22 2 + reps 23 2 + reps 24 3
         + reps 25 3 + reps 26 3 + reps 27 3 + reps 28 2 + reps 29 2
         + reps 30 2 + reps 31 2 + reps 32 2 + reps 33 1 + reps 34 1 + reps 35 1.
 
-shuffle seed l = l |> shuf seed Nil.
-shuf seed acc Nil = acc.
-shuf seed acc l =
+# Draw a card at random from the cards left and deal it onto the pile, until
+# none are left.  The cards left are a linear Vector (written in place): the
+# drawn card's place is closed up so the rest keep their order, which is what
+# keeps every seed's deck the same as before.
+shuffle seed l = shuf seed Nil (Vec.fromList l) (List.len l).
+shuf : Int -> List Int -> Vector Int -> (n : Int | measure n) -> List Int .
+shuf seed acc v n | n <= 0 = _ = Vec.free v; acc.
+shuf seed acc v n =
   s2 = Pr.rnd seed;
-  (x, rest) = Pr.takeAt l (s2 % List.len l);
-  rest |> shuf s2 (x :: acc).
+  k = s2 % n;
+  (x, v1) = Vec.get k v;
+  shuf s2 (x :: acc) (closeUp v1 k (n - 1)) (n - 1).
+# cards i+1 .. last move down one place
+closeUp : Vector Int -> (i : Int | measure (last - i)) -> (last : Int) -> Vector Int .
+closeUp v i last | i >= last = v.
+closeUp v i last =
+  (y, v1) = Vec.get (i + 1) v;
+  closeUp (Vec.set i y v1) (i + 1) last.
 
 facIds 0 = range 0 14.
 facIds f = range 20 35.

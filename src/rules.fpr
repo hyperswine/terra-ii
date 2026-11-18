@@ -185,8 +185,8 @@ collect m s z c =
   case Bd.alive u and u.hp <= 0 of
     True -> collect (slay m s z c) s z (c + 1)
   | False -> collect m s z (c + 1).
-trim l n | List.len l <= n = l.
-trim l n = trim (Pr.delAt l (List.len l - 1)) n.
+# the first n (a longer hand loses its newest cards)
+trim l n = List.take l n.
 
 # ---- rules: the player's and the AI's actions, applied ------------------------------
 

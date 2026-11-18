@@ -20,13 +20,6 @@ delAt l i = case l of
 
 rev l acc = l |> List.fold (fn x xs -> x :: xs) acc.
 
-takeAt : (l : List a | measure l) -> Int -> (a, List a) .
-takeAt l k = case l of
-    Nil -> error "takeAt: index outside list"
-  | x :: r -> case k == 0 of
-      True -> (x, r)
-    | False -> (y, rest) = takeAt r (k - 1); (y, x :: rest).
-
 bi True = 1.
 bi False = 0.
 
