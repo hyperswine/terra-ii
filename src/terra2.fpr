@@ -61,6 +61,7 @@ Tank = use "../models/tank/tank".
 Inf = use "../models/infantry/infantry".
 Truck = use "../models/truck/truck".
 Hq = use "../models/hq/hq".
+Fuel = use "../models/fuel/fuel".
 
 Pr = use "prelude".
 Md = use "model".
@@ -71,7 +72,7 @@ Inp = use "input".
 Gm = use "game".
 
 models : List (String, String) .
-models = Tank.meshes + Inf.meshes + Truck.meshes + Hq.meshes.
+models = Tank.meshes + Inf.meshes + Truck.meshes + Hq.meshes + Fuel.meshes.
 
 # ---- the game ----------------------------------------------------------------------------
 # init, update and subs are game.fpr: pure functions over the model, playable

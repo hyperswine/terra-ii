@@ -222,7 +222,9 @@ unitEnts es m s z c u =
   es1 = case u.down == 1 of
     True -> Ent "cube" (x, 80, zz) 0 (1700, 120, 2200) (150, 150, 180) ::
             txtC es "?" x 700 (zz + 600) 90 (600, 600, 700)
-  | False -> solids es (Bd.uKind u) (Bd.uSoft u) x (y + lift) zz d k col (accent s u) (turretYaw m s z c x zz) m.ms (Mo.phaseOf s z c);
+  | False -> (case u.id == 15 of
+      True -> fuelDump es x (y + lift) zz d k col
+    | False -> solids es (Bd.uKind u) (Bd.uSoft u) x (y + lift) zz d k col (accent s u) (turretYaw m s z c x zz) m.ms (Mo.phaseOf s z c));
   es2 = Ent "sphere" (x, 60, zz) 0 (1500 * k / 1000, 30, 1500 * k / 1000) Pl.shadow :: es1;
   hot = s == 0 and (isCursor m z c or isSelected m z c);
   case u.down == 1 of
@@ -270,6 +272,13 @@ solids es kind 1 x y z d k col acc ty ms ph =
   Ent "infantry" (bx, y, z) by (sc, sc, sc) col ::
   Ent "infantry_kit" (bx, y, z) by (sc, sc, sc) Pl.dark ::
   Ent "infantry_rifle" (bx, y + (stride + 1000) * 30 / 2000, rz) (by + stride * 160 / 1000) (sc, sc, sc) Pl.dark :: es.
+# FuelDump: three barrels from Poly Haven's barrel_03 (models/fuel), two up
+# front in the side's colour and one behind in drab, each turned a little
+fuelDump es x y z d k col =
+  b = k * 9 / 10;
+  Ent "fuel_barrel" (x - 380 * k / 1000, y, z + d * 260 * k / 1000) 400 (b, b, b) col ::
+  Ent "fuel_barrel" (x + 380 * k / 1000, y, z + d * 260 * k / 1000) 1900 (b, b, b) col ::
+  Ent "fuel_barrel" (x, y, z - d * 330 * k / 1000) 1100 (b, b, b) Pl.khaki :: es.
 # heavy: the CoScad tank (models/tank), hull + turret, 1 model unit = 1000
 solids es kind soft x y z d k col acc ty ms ph =
   hy = case d < 0 of True -> 0 | False -> 3142;

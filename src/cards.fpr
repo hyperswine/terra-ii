@@ -26,6 +26,8 @@ cardOf 11 = Card 11 "CombArms" 4 4 5 0 1 0 0.
 cardOf 12 = Card 12 "Coilgun" 4 4 2 0 1 2 0.
 cardOf 13 = Card 13 "AirWing" 5 3 3 0 1 0 0.
 cardOf 14 = Card 14 "CmdrJake" 5 2 5 0 0 0 1.
+# drawn as three fuel barrels pulled from Poly Haven (models/fuel, scripts/fetch-model.sol)
+cardOf 15 = Card 15 "FuelDump" 3 0 4 2 0 1 0.
 
 # Southern Empire
 cardOf 20 = Card 20 "FwdDepot" 2 0 3 1 0 1 0.
@@ -66,7 +68,7 @@ reps k n = k :: reps k (n - 1).
 # the Republic VI deck: a list of card ids with repetitions according to the deck composition
 deckRep = reps 0 3 + reps 1 2 + reps 2 2 + reps 3 3 + reps 4 3
         + reps 5 3 + reps 6 3 + reps 7 3 + reps 8 2 + reps 9 2
-        + reps 10 2 + reps 11 2 + reps 12 2 + reps 13 1 + reps 14 1.
+        + reps 10 2 + reps 11 2 + reps 12 2 + reps 13 1 + reps 14 1 + reps 15 1.
 
 # the Southern Empire deck: a list of card ids with repetitions according to the deck composition
 deckSou = reps 20 3 + reps 21 2 + reps 22 2 + reps 23 2 + reps 24 3
@@ -92,7 +94,7 @@ closeUp v i last =
   (y, v1) = Vec.get (i + 1) v;
   closeUp (Vec.set i y v1) (i + 1) last.
 
-facIds 0 = range 0 14.
+facIds 0 = range 0 15.
 facIds f = range 20 35.
 range a b | a > b = Nil.
 range a b = a :: range (a + 1) b.
