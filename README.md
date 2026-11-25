@@ -4,7 +4,7 @@ The original Terra II positional card game in a standalone 3D QOS Portable windo
 
 ## Install and run
 
-Needs QOS Portable 0.3.0 or later (`[sdk] version` in `qos.toml`), which adds `kind = "app"` projects to `qos build` and `qos run`. 0.3.0 is not released yet; until it is, put a staged SDK's `bin/` first on `PATH`. Tested on macOS ARM64.
+Needs QOS Portable 0.6.0 or later (`[sdk] version` in `qos.toml`), which adds `kind = "app"` projects to `qos build` and `qos run`. Tested on macOS ARM64.
 
 ```sh
 brew install hyperswine/tap/fprisc hyperswine/tap/qos-portable  # fprisc provides sol
