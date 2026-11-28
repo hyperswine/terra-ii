@@ -1,4 +1,4 @@
-C = use "common".
+C = use "sol/lib/project".
 P = use "sol/lib/proc".
 J = use "sol/lib/json".
 

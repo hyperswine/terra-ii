@@ -2,7 +2,7 @@
 
 unsafe program.
 
-C = use "scripts/common".
+C = use "sol/lib/project".
 
 # qos build / qos run (QOS Portable SDK, qos.toml) own compiling, linking,
 # packaging and launching; this script only sequences them.
