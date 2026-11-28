@@ -7,7 +7,9 @@
 # Nothing here opens or plays anything, so a test plays a match with Game.play
 # and reads back the model and the requests (tests/game.fpr).
 
-unsafe module.
+# Functions marked `unsafe` below call into the unsafe modules input.fpr and
+# save.fpr, or into the actions that queue mods/sfx cues; everything else
+# here is checked safe.
 
 Game = use "std/game".
 O = use "std/option".
@@ -28,10 +30,14 @@ Sv = use "save".
 Msg = Type (Tick | KeyIn k | Wheel dy | GotProfile r | GotGame r | Wrote id r | Checked id r | GotHint rev res).
 
 tickMs = 40.
+# unsafe: input.fpr (where the name lives) is an unsafe module
+musicFile : unsafe _ .
 musicFile = Inp.musicFile.
 
+init : unsafe _ -> _ .
 init flags = (Md.initModel, Sv.loadTasks GotProfile GotGame).
 
+update : unsafe _ -> _ -> _ .
 update msg m =
   (m1, cs) = step msg m;
   (m2, tunes) = tuned m1;
@@ -39,6 +45,7 @@ update msg m =
   (m4, hints) = syncHint m msg m3;
   (m4, Game.batch (tunes + cs + captured m m4 + saves + hints)).
 
+step : unsafe _ -> _ -> _ .
 step Tick m = tick (Sv.rested m).
 step (KeyIn k) m = Inp.keyIn m k.
 step (Wheel dy) m = (Ui.wheel m dy, Nil).
@@ -78,6 +85,7 @@ syncHint m msg m3 =
 # ---- the tick ----------------------------------------------------------------------------
 # The rules and the input handlers queue their words (m.log) and their cues
 # (m.sfx) on the model; the tick that ran them asks for them, once.
+tick : unsafe _ -> _ .
 tick m | m.qt > 0 and m.qt <= tickMs = (m, [Game.quit]).
 tick m | m.qt > 0 = ({ m | qt = m.qt - tickMs }, Nil).
 tick m | Md.frozen m =
@@ -88,9 +96,11 @@ tick m =
   Md.An kind s fz fc tz tc t done = m1.anim;
   (m2, cs) = if kind != 0 then (Ac.advance m1 tickMs, Nil) else idle m1;
   (m2, spoken m2 + cs).
+idle : unsafe _ -> _ .
 idle m = case m.queue of
     a :: r -> (Ac.startAct { m | queue = r } a, Nil)
   | Nil -> takeKey m.
+takeKey : unsafe _ -> _ .
 takeKey m = case m.keys of
     Nil -> (m, Nil)
   | k :: r -> Inp.key { m | keys = r } k.
@@ -99,15 +109,21 @@ takeKey m = case m.keys of
 # plus 37 for every tone before it in this tick: four rifle cracks in a row are
 # four cracks, not one four times.
 spoken m = lines (Pr.rev m.log Nil) + cues m.ms 0 (Pr.rev m.sfx Nil).
-lines Nil = Nil.
-lines (s :: r) = Game.log "[terra2] {s}" :: lines r.
-cues seed n Nil = Nil.
-cues seed n (riff :: r) = Game.sound riff (seed + n * 37) :: cues seed (n + List.len riff) r.
+lines : (l : List String | measure l) -> _ .
+lines l = case l of
+    Nil -> Nil
+  | s :: r -> Game.log "[terra2] {s}" :: lines r.
+cues : Int -> Int -> (l : List _ | measure l) -> _ .
+cues seed n l = case l of
+    Nil -> Nil
+  | riff :: r -> Game.sound riff (seed + n * 37) :: cues seed (n + List.len riff) r.
 
 # the music's volume requests, oldest first
+tuned : unsafe _ -> _ .
 tuned m = case m.mus of
     Nil -> (m, Nil)
   | vs -> ({ m | mus = Nil }, volumes (Pr.rev vs Nil)).
+volumes : unsafe _ -> _ .
 volumes Nil = Nil.
 volumes (v :: r) = Game.music musicFile v :: volumes r.
 

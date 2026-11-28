@@ -1,8 +1,6 @@
 # ---- motion: easing, integer trig and the clock's waves (milli units) ----------------
 # k in 0..1000 in, 0..1000 out; angles in milli-radians.
 
-unsafe module.
-
 # ---- easing (milli): the difference between a thing moving and a thing
 # ARRIVING.  k in 0..1000 -> 0..1000.
 easeOut k = 1000 - (1000 - k) * (1000 - k) / 1000.
@@ -19,8 +17,10 @@ clampK k = Int.max 0 (Int.min 1000 k).
 sinM x =
   r = ((x % 6283) + 6283) % 6283;
   if r > 3142
-    then 0 - sinM (r - 3142)
-    else 16 * r * (3142 - r) * 1000 / (5 * 3142 * 3142 - 4 * r * (3142 - r)).
+    then 0 - bhaskara (r - 3142)
+    else bhaskara r.
+# the half wave, r in 0..3142
+bhaskara r = 16 * r * (3142 - r) * 1000 / (5 * 3142 * 3142 - 4 * r * (3142 - r)).
 cosM x = sinM (x + 1571).
 # the direction a yaw faces, milli: yaw 0 is -z (the player's front)
 facing yaw = (0 - sinM yaw, 0 - cosM yaw).
@@ -46,9 +46,16 @@ phaseOf s z c = (s * 7 + z * 3 + c * 11) * 397.
 
 # atan(dx/dz) in milli-radians, signed like dx; |r| <= 1 by the polynomial
 # r(pi/4 + 0.273(1 - |r|)), beyond it by pi/2 - atan(dz/dx)
-atanM dx dz | dz == 0 = if dx > 0 then 1571 else (if dx < 0 then 0 - 1571 else 0).
-atanM dx dz | Int.abs dx > dz = if dx > 0 then 1571 - atanM dz (Int.abs dx) else 0 - 1571 + atanM dz (Int.abs dx).
-atanM dx dz =
+# (the reflection is unrolled: atanFlip is atanM after one reflection, and a
+# second reflection always lands in the polynomial, so nothing recurses)
+atanM dx dz | dz == 0 = atanAxis dx.
+atanM dx dz | Int.abs dx > dz = if dx > 0 then 1571 - atanFlip dz (Int.abs dx) else 0 - 1571 + atanFlip dz (Int.abs dx).
+atanM dx dz = atanPoly dx dz.
+atanFlip dx dz | dz == 0 = atanAxis dx.
+atanFlip dx dz | Int.abs dx > dz = if dx > 0 then 1571 - atanPoly dz (Int.abs dx) else 0 - 1571 + atanPoly dz (Int.abs dx).
+atanFlip dx dz = atanPoly dx dz.
+atanAxis dx = if dx > 0 then 1571 else (if dx < 0 then 0 - 1571 else 0).
+atanPoly dx dz =
   r = Int.abs dx * 1000 / dz;
   a = r * (785 + 273 * (1000 - r) / 1000) / 1000;
   if dx < 0 then 0 - a else a.

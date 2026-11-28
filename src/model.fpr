@@ -1,7 +1,5 @@
 # ---- the model: screens, selection, queued actions and the animation in flight ---------
 
-unsafe module.
-
 Pr = use "prelude".
 Cd = use "cards".
 Bd = use "board".
@@ -83,6 +81,8 @@ note m s = { m | msg = s, log = s :: m.log }.
 cue m r = { m | sfx = r :: m.sfx }.
 # the music's volume from now on: queued the same way, newest first
 tune m v = { m | mus = v :: m.mus }.
+# unsafe: the refusal cue is a mods/sfx riff, and mods/sfx is an unsafe module
+oops : unsafe _ -> String -> _ .
 oops m s = cue (note m s) Sfx.refuse.
 
 # a floating number over a spot on the table

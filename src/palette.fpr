@@ -1,7 +1,5 @@
 # ---- the palette: every colour the game uses, named once -------------------------------
 
-unsafe module.
-
 # A dusk board: a cool blue-grey sky and ground, two desaturated factions
 # (a steel blue and a brick red) with one saturated accent (the amber the
 # cursor, the hand's highlight and every "yours" pulse share), and a

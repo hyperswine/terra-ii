@@ -1,6 +1,7 @@
 # ---- the queue: an action's animation, and the tick that plays it -----------------------
 
-unsafe module.
+# Functions marked `unsafe` below queue a sound cue from mods/sfx, an unsafe
+# module, or call one that does; everything else here is checked safe.
 
 Pr = use "prelude".
 Bd = use "board".
@@ -14,6 +15,7 @@ Sfx = use "mods/sfx".
 # startAct validates an action and picks its animation; the midpoint applies
 # the rule, and the end clears it.
 
+startAct : unsafe _ -> _ -> _ .
 startAct m a = case a of
     Md.ABeat -> pause m 260
   | Md.AStart s ->
@@ -36,6 +38,7 @@ pause m ms = { m | anim = Md.An 4 0 0 0 0 0 (0 - ms) 1 }.
 flyCard m2 m s i z c | m2.me.stock == m.me.stock and m2.en.stock == m.en.stock = pause m2 250.
 flyCard m2 m s i z c = { m2 | anim = Md.An 5 s i 0 z c 0 1 }.
 
+overwatch : unsafe _ -> _ -> _ -> _ .
 overwatch m s c =
   p = Bd.sideOf m s;
   u = Bd.slotOf p 1 c;
@@ -43,12 +46,14 @@ overwatch m s c =
     then Bd.setSide (Md.cue { m | msg = (if u.mode == 0 then "overwatch" else "back to attack mode") } Sfx.toggle)
                     s (Bd.setSlot p 1 c { u | mode = 1 - u.mode, ready = 0 })
     else Md.oops m "that unit cannot change mode now".
+charge : unsafe _ -> _ -> _ -> _ .
 charge m s c =
   p = Bd.sideOf m s;
   u = Bd.slotOf p 1 c;
   if Ru.canAct u and Bd.uKind u == 2
     then Bd.setSide (Md.cue { m | msg = "charging" } Sfx.charge) s (Bd.setSlot p 1 c { u | chg = 1, ready = 0 })
     else Md.oops m "only ready artillery charges".
+slide : unsafe _ -> _ -> _ -> _ -> _ -> _ -> _ .
 slide m s fz fc tz tc =
   p = Bd.sideOf m s;
   u = Bd.slotOf p fz fc;
@@ -56,6 +61,7 @@ slide m s fz fc tz tc =
   if ok
     then Md.cue { m | anim = Md.An 3 s fz fc tz tc 0 0, msg = (if tz == 2 then "retreat" else "advance") } Sfx.move
     else Md.oops m "cannot move that unit".
+attack : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 attack m s c tz tc =
   u = Bd.slotOf (Bd.sideOf m s) 1 c;
   ok = Ru.canAct u and u.mode == 0 and Bd.uKind u != 2 and Ru.targetOk m s c tz tc;
@@ -69,12 +75,14 @@ attack m s c tz tc =
                                                 (if Bd.uSoft u == 1 then Sfx.rifle else Sfx.cannon)
     else Md.oops m "no valid attack there".
 # muzzle smoke: n puffs around a point, held (negative age) until the shot
-smoke ps pos n delay | n == 0 = ps.
+smoke : _ -> _ -> (n : Int | measure n) -> Int -> _ .
+smoke ps pos n delay | n <= 0 = ps.
 smoke ps pos n delay =
   (x, y, z) = pos;
   smoke ((x + (n * 271) % 300 - 150, y + (n * 97) % 200 - 100, z + (n * 181) % 300 - 150, 0 - delay - n * 25) :: ps) pos (n - 1) delay.
 tgtName 3 c = "the HQ".
 tgtName z c = "{Md.zoneName z} {c}".
+fire : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 fire m s c tz tc =
   u = Bd.slotOf (Bd.sideOf m s) 1 c;
   ok = Ru.canAct u and u.chg == 1 and Bd.uKind u == 2 and Ru.fireOk m s tz tc;
@@ -82,6 +90,7 @@ fire m s c tz tc =
     then Md.cue (Md.note { m | anim = Md.An 2 s 1 c tz tc 0 0 } "{Md.sideName s}: artillery fires at {tgtName tz (tc + 1)}") Sfx.shot
     else Md.oops m "artillery must be charged, and aimed at the rear or the HQ".
 
+advance : unsafe _ -> _ -> _ .
 advance m dt =
   Md.An kind s fz fc tz tc t done = m.anim;
   t2 = t + dt;
@@ -91,6 +100,7 @@ advance m dt =
   if t2 >= (if kind == 4 then 0 else Md.durOf kind)
     then finishAn m1 kind s fz fc tz tc
     else m1.
+midpoint : unsafe _ -> _ -> _ -> _ -> _ -> _ -> _ -> _ .
 midpoint m 1 s fz fc tz tc = Ru.resolveAttack m s fc tz tc.
 midpoint m 2 s fz fc tz tc =
   m2 = Ru.spend m s 1 fc;
@@ -110,9 +120,10 @@ ageAll m dt =
          marks = ageMarks m.marks dt Nil, vt = (if m.turn == 1 then Int.min 400 (m.vt + dt) else Int.max 0 (m.vt - dt)),
          gone = ageGone m.gone dt, dealt = Int.min 1000 (m.dealt + dt),
          nums = ageNums m.nums dt Nil, shake = Int.max 0 (m.shake - dt), puffs = agePuffs m.puffs dt Nil }.
-agePuffs Nil dt acc = acc.
-agePuffs ((x, y, z, t) :: r) dt acc | t + dt > 700 = agePuffs r dt acc.
-agePuffs ((x, y, z, t) :: r) dt acc = agePuffs r dt ((x, y, z, t + dt) :: acc).
+agePuffs : (l : List _ | measure l) -> _ -> _ -> _ .
+agePuffs l dt acc = case l of
+    Nil -> acc
+  | (x, y, z, t) :: r -> if t + dt > 700 then agePuffs r dt acc else agePuffs r dt ((x, y, z, t + dt) :: acc).
 # the visual state chasing the model: the cursor ring glides a third of
 # the way to its slot each tick; hovT counts since the hover last moved
 chase m dt =
@@ -132,20 +143,23 @@ ringTarget m = case m.sel of
         else (Bd.colX m.cur, Bd.zOf 1 m.zone))
   | s -> (if m.zone == 0 then m.ring else (Bd.colX m.cur, Bd.zOf 0 m.zone)).
 ageGone (i, t) dt = (i, Int.min 1000 (t + dt)).
-ageMarks Nil dt acc = acc.
-ageMarks ((x, z, t) :: r) dt acc | t + dt > 20000 = ageMarks r dt acc.
-ageMarks ((x, z, t) :: r) dt acc = ageMarks r dt ((x, z, t + dt) :: acc).
-ageNums Nil dt acc = acc.
-ageNums ((x, z, s, t) :: r) dt acc | t + dt > 750 = ageNums r dt acc.
-ageNums ((x, z, s, t) :: r) dt acc = ageNums r dt ((x, z, s, t + dt) :: acc).
+ageMarks : (l : List _ | measure l) -> _ -> _ -> _ .
+ageMarks l dt acc = case l of
+    Nil -> acc
+  | (x, z, t) :: r -> if t + dt > 20000 then ageMarks r dt acc else ageMarks r dt ((x, z, t + dt) :: acc).
+ageNums : (l : List _ | measure l) -> _ -> _ -> _ .
+ageNums l dt acc = case l of
+    Nil -> acc
+  | (x, z, s, t) :: r -> if t + dt > 750 then ageNums r dt acc else ageNums r dt ((x, z, s, t + dt) :: acc).
 ageSide p dt = { p | fwd = ageRow p.fwd dt, rear = ageRow p.rear dt }.
 ageRow row dt = row |> List.map (fn u -> ageU u dt).
 ageU u dt | u.id < 0 = u.
 ageU u dt | u.dead == 1 and u.dt + dt > 420 = Bd.noU.
 ageU u dt = { u | flash = Int.max 0 (u.flash - dt), born = Int.min 1000 (u.born + dt), dt = u.dt + dt }.
-ageFx Nil dt acc = acc.
-ageFx ((x, y, z, t) :: r) dt acc | t + dt > 380 = ageFx r dt acc.
-ageFx ((x, y, z, t) :: r) dt acc = ageFx r dt ((x, y, z, t + dt) :: acc).
+ageFx : (l : List _ | measure l) -> _ -> _ -> _ .
+ageFx l dt acc = case l of
+    Nil -> acc
+  | (x, y, z, t) :: r -> if t + dt > 380 then ageFx r dt acc else ageFx r dt ((x, y, z, t + dt) :: acc).
 
 # the track beside the .qa (`#: music` above: run points FPR_ASSETS at it,
 # pack copies it into the bundle); M toggles it

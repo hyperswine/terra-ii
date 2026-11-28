@@ -1,7 +1,5 @@
 # ---- the AI (side 1): greedy, positional ------------------------------------------------
 
-unsafe module.
-
 Pr = use "prelude".
 Cd = use "cards".
 Bd = use "board".
@@ -14,19 +12,26 @@ Ru = use "rules".
 # unit, else the weakest forward unit in reach, else goes to overwatch;
 # artillery charges then fires at the richest rear unit (or the HQ).
 
+# unsafe: aiCalls and aiCall recurse into each other (n falls by one a
+# round trip), which a measure cannot state
+aiPlan : unsafe _ -> _ .
 aiPlan m =
   p = m.en;
   (calls, p2) = aiCalls m p 0 Nil 3;
   acts = aiActs m p2 0 Nil;
   beats (calls + acts).
-beats Nil = Nil.
-beats (a :: r) = a :: Md.ABeat :: beats r.
+beats : (l : List _ | measure l) -> _ .
+beats l = case l of
+    Nil -> Nil
+  | a :: r -> a :: Md.ABeat :: beats r.
+aiCalls : unsafe _ -> _ -> _ -> _ -> Int -> _ .
 aiCalls m p i acc n | n == 0 = (Pr.rev acc Nil, p).
 aiCalls m p i acc n =
   k = bestCard p.hand p.stock 0 (0 - 1) (0 - 1);
   if k < 0
     then (Pr.rev acc Nil, p)
     else aiCall m p acc n k (Cd.cardOf (Pr.nth p.hand k 0)).
+aiCall : unsafe _ -> _ -> _ -> Int -> Int -> _ -> _ .
 aiCall m p acc n k cd =
   z = if Cd.cKind cd == 1 then 2 else 1;
   c = freeCol p z;
@@ -35,22 +40,28 @@ aiCall m p acc n k cd =
     else aiCalls m (Bd.setSlot { p | stock = p.stock - Cd.cCost cd, hand = Pr.delAt p.hand k } z c (Bd.mkU cd 0))
                      0 (Md.ACall 1 k z c :: acc) (n - 1).
 # index of the dearest affordable card (support preferred when nothing is in the rear)
-bestCard Nil stock i best bcost = best.
-bestCard (k :: r) stock i best bcost =
-  co = Cd.cCost (Cd.cardOf k);
-  worth = co + 2 * Cd.cGen (Cd.cardOf k);
-  if co <= stock and worth > bcost
-    then bestCard r stock (i + 1) i worth
-    else bestCard r stock (i + 1) best bcost.
+bestCard : (l : List _ | measure l) -> Int -> Int -> Int -> Int -> Int .
+bestCard l stock i best bcost = case l of
+    Nil -> best
+  | k :: r ->
+      co = Cd.cCost (Cd.cardOf k);
+      worth = co + 2 * Cd.cGen (Cd.cardOf k);
+      if co <= stock and worth > bcost
+        then bestCard r stock (i + 1) i worth
+        else bestCard r stock (i + 1) best bcost.
 # a free column for zone z: forward slots in front of a rear unit first,
 # rear slots behind a forward unit first, centre outward
 freeCol p z = fcGo p z [2, 1, 3, 0, 4] (0 - 1).
-fcGo p z Nil best = best.
-fcGo p z (c :: r) best | Bd.occ p z c = fcGo p z r best.
-fcGo p z (c :: r) best | Bd.occ p (3 - z) c = c.
-fcGo p z (c :: r) best | best < 0 = fcGo p z r c.
-fcGo p z (c :: r) best = fcGo p z r best.
+fcGo : _ -> Int -> (l : List Int | measure l) -> Int -> Int .
+fcGo p z l best = case l of
+    Nil -> best
+  | c :: r ->
+      if Bd.occ p z c then fcGo p z r best
+      else if Bd.occ p (3 - z) c then c
+      else if best < 0 then fcGo p z r c
+      else fcGo p z r best.
 
+aiActs : _ -> _ -> (c : Int | measure (4 - c)) -> _ -> _ .
 aiActs m p c acc | c > 4 = Pr.rev acc Nil.
 aiActs m p c acc =
   u = Bd.slotOf p 1 c;
@@ -72,6 +83,7 @@ aiPick m c rc fc | fc >= 0 = Md.AAttack 1 1 c 1 fc.
 aiPick m c rc fc = Md.AOver 1 c.
 # the weakest valid target in zone tz within reach of column c, or -1
 bestIn m c tz = biGo m c tz (Int.max 0 (c - 1)) (Int.min 4 (c + 1)) (0 - 1) 999.
+biGo : _ -> Int -> Int -> (k : Int | measure (hi - k)) -> (hi : Int) -> Int -> Int -> Int .
 biGo m c tz k hi best bhp | k > hi = best.
 biGo m c tz k hi best bhp =
   u = Bd.slotOf m.me tz k;
@@ -84,9 +96,12 @@ aiArt m c u =
   if rc < 0
     then Md.AFire 1 c 3 0
     else Md.AFire 1 c 2 rc.
-richest Nil i best bg = best.
-richest (u :: r) i best bg | Bd.alive u and Cd.cGen (Bd.uCard u) > bg = richest r (i + 1) i (Cd.cGen (Bd.uCard u)).
-richest (u :: r) i best bg = richest r (i + 1) best bg.
+richest : (l : List _ | measure l) -> Int -> Int -> Int -> Int .
+richest l i best bg = case l of
+    Nil -> best
+  | u :: r ->
+      if Bd.alive u and Cd.cGen (Bd.uCard u) > bg then richest r (i + 1) i (Cd.cGen (Bd.uCard u))
+      else richest r (i + 1) best bg.
 
 # ---- tactical hint for the player's selected unit (replaceable chunked search) --------
 Game = use "std/game".
@@ -97,12 +112,13 @@ hintStep st =
   (cands, best, lbl) = st;
   hintChunk 2 cands best lbl.
 
-hintChunk 0 Nil best lbl = Game.done (if lbl == "" then "" else "hint: {lbl}").
-hintChunk 0 cands best lbl = Game.more (cands, best, lbl).
-hintChunk n Nil best lbl = Game.done (if lbl == "" then "" else "hint: {lbl}").
-hintChunk n ((s, l) :: more) best lbl =
-  if s > best then hintChunk (n - 1) more s l
-  else hintChunk (n - 1) more best lbl.
+hintChunk : Int -> (cands : List _ | measure cands) -> Int -> String -> _ .
+hintChunk n cands best lbl = case cands of
+    Nil -> Game.done (if lbl == "" then "" else "hint: {lbl}")
+  | (s, l) :: more ->
+      if n == 0 then Game.more (cands, best, lbl)
+      else if s > best then hintChunk (n - 1) more s l
+      else hintChunk (n - 1) more best lbl.
 
 hintCands m z c =
   u = Bd.slotOf m.me z c;
@@ -122,6 +138,7 @@ hintArt m c u =
   retreat = if not (Bd.occ m.me 2 c) then [(10, "retreat to rear (R)")] else Nil;
   hintFireCands m u 0 ((hqScore, "fire at enemy HQ (F)") :: retreat).
 
+hintFireCands : _ -> _ -> (tc : Int | measure (4 - tc)) -> _ -> _ .
 hintFireCands m u tc acc | tc > 4 = acc.
 hintFireCands m u tc acc =
   acc2 = if Ru.fireOk m 0 2 tc
@@ -139,6 +156,7 @@ hintFwd m c u =
     then hintAtkCands m c u (Int.max 0 (c - 1)) (Int.min 4 (c + 1)) base
     else base.
 
+hintAtkCands : _ -> Int -> _ -> (tc : Int | measure (hi - tc)) -> (hi : Int) -> _ -> _ .
 hintAtkCands m c u tc hi acc | tc > hi = acc.
 hintAtkCands m c u tc hi acc =
   a1 = if Ru.targetOk m 0 c 3 tc

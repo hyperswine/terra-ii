@@ -1,6 +1,7 @@
 # ---- the rules: validation, effects and the phases of a turn ----------------------------
 
-unsafe module.
+# Functions marked `unsafe` below queue a sound cue from mods/sfx, an unsafe
+# module, or call one that does; everything else here is checked safe.
 
 Pr = use "prelude".
 Cd = use "cards".
@@ -34,6 +35,7 @@ canAct u = Bd.alive u and u.ready == 1 and u.down == 0.
 
 # ---- rules: effects -----------------------------------------------------------------
 
+damageUnit : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 damageUnit m s z c dmg =
   p = Bd.sideOf m s;
   u = Bd.slotOf p z c;
@@ -44,6 +46,7 @@ damageUnit m s z c dmg =
   if Bd.alive u and hp2 <= 0
     then slay m2 s z c
     else m2.
+slay : unsafe _ -> _ -> _ -> _ -> _ .
 slay m s z c =
   p = Bd.sideOf m s;
   u = Bd.slotOf p z c;
@@ -52,6 +55,7 @@ slay m s z c =
   Md.cue (Md.note { m2 | env = Int.min 10 (m2.env + (if Bd.uSoft u == 1 then 1 else 2)),
                    fx = sparks m2.fx (Bd.posOf s z c) 6, shake = 160, marks = (mx, mz, 0) :: m2.marks,
                    lostU = m2.lostU + Pr.bi (s == 0), kills = m2.kills + Pr.bi (s == 1) } "{Cd.cName (Bd.uCard u)} destroyed") Sfx.kill.
+damageHq : unsafe _ -> _ -> _ -> _ .
 damageHq m s dmg =
   p = Bd.sideOf m s;
   hq2 = p.hq - dmg;
@@ -66,13 +70,15 @@ damageHq m s dmg =
                       (if s == 1 then "VICTORY" else "DEFEAT"))
                 (if s == 1 then Sfx.victory else Sfx.defeat)
     else m3.
-sparks fx pos n | n == 0 = fx.
+sparks : _ -> _ -> (n : Int | measure n) -> _ .
+sparks fx pos n | n <= 0 = fx.
 sparks fx pos n =
   (x, y, z) = pos;
   sparks ((x + (n * 337) % 900 - 450, 900 + (n * 191) % 500, z + (n * 271) % 700 - 350, 0) :: fx) pos (n - 1).
 
 # the attack itself: overwatch intercept (once per enemy turn) and ambush
 # reveal happen BEFORE the blow lands; a dead attacker lands nothing.
+resolveAttack : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 resolveAttack m s c tz tc =
   m1 = intercept m s c tc;
   m2 = ambush m1 s c tz tc;
@@ -80,6 +86,7 @@ resolveAttack m s c tz tc =
   if Bd.alive a
     then landBlow (spend m2 s 1 c) s c tz tc a.atk
     else Md.note m2 "the attacker fell before striking".
+landBlow : unsafe _ -> _ -> _ -> _ -> _ -> _ -> _ .
 landBlow m s c 3 tc dmg = damageHq m (1 - s) dmg.
 landBlow m s c tz tc dmg = damageUnit m (1 - s) tz tc dmg.
 spend m s z c =
@@ -87,7 +94,9 @@ spend m s z c =
   u = Bd.slotOf p z c;
   Bd.setSide m s (Bd.setSlot p z c { u | ready = 0, chg = 0 }).
 
+intercept : unsafe _ -> _ -> _ -> _ -> _ .
 intercept m s c tc = intGo m s c tc (Int.max 0 (tc - 1)) (Int.min 4 (tc + 1)).
+intGo : unsafe _ -> _ -> _ -> _ -> _ -> _ -> _ .
 intGo m s c tc k hi | k > hi = m.
 intGo m s c tc k hi =
   o = Bd.sideOf m (1 - s);
@@ -95,6 +104,7 @@ intGo m s c tc k hi =
   if Bd.alive u and u.mode == 1 and u.ow == 0
     then interceptBy (Bd.setSide m (1 - s) (Bd.setSlot o 1 k { u | ow = 1 })) s c k (u.atk / 2)
     else intGo m s c tc (k + 1) hi.
+interceptBy : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 interceptBy m s c k dmg =
   m2 = damageUnit m s 1 c dmg;
   Md.cue (Md.note { m2 | fx = sparks m2.fx (Bd.posOf s 1 c) 4 } "overwatch intercepts for {dmg}") Sfx.intercept.
@@ -102,6 +112,7 @@ interceptBy m s c k dmg =
 # ambush: attacking the forward unit in a column, or the face-down card
 # itself, wakes a READY face-down rear card: full ATK to the attacker, then
 # it stands face-up in the rear
+ambush : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 ambush m s c tz tc | tz == 3 = m.
 ambush m s c tz tc =
   o = Bd.sideOf m (1 - s);
@@ -109,6 +120,7 @@ ambush m s c tz tc =
   if Bd.alive u and u.down == 1 and u.rdy == 1
     then reveal m s c tc u
     else m.
+reveal : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 reveal m s c tc u =
   o = Bd.sideOf m (1 - s);
   m2 = Bd.setSide m (1 - s) (Bd.setSlot o 2 tc { u | down = 0, born = 0 });
@@ -130,6 +142,7 @@ repairOne u amt | Bd.alive u and Bd.uKind u != 1 = { u | hp = Int.min (Bd.uMax u
 repairOne u amt = u.
 hasId row k = row |> List.fold (fn u found -> found or Bd.alive u and u.id == k) False.
 
+startTurn : unsafe _ -> _ -> _ .
 startTurn m s =
   p = Bd.sideOf m s;
   eng = Pr.bi (hasId p.rear 2);
@@ -144,6 +157,7 @@ startTurn m s =
               sel = Md.SNone } "turn {m2.tno + Pr.bi (s == 0)} side {s}: supply {stock2} (rate {r})")
            (if s == 0 then Sfx.yourTurn else Sfx.enemyTurn);
   m3.
+draw : unsafe _ -> _ -> _ -> _ .
 draw m s p = case p.deck of
     Nil -> (p, damageHq { m | msg = "deck out: HQ takes 2" } s 2)
   | k :: r -> drawn (if s == 0 then { m | dealt = 0 } else m) s { p | deck = r, hand = p.hand + [k] }.
@@ -151,6 +165,7 @@ drawn m s p = (p, Bd.setSide m s p).
 
 # NOTE (balance, 2026-11-17): ENV damage feels like it is scaling too fast right now
 # (every unit death adds +1/+2 ENV up to 10, and both sides tick ENV damage at endTurn).
+endTurn : unsafe _ -> _ -> _ .
 endTurn m s =
   p = Bd.sideOf m s;
   p1 = { p | fwd = envRow p.fwd m.env, rear = envRow p.rear m.env, hand = trim p.hand 7 };
@@ -163,7 +178,8 @@ endTurn m s =
 envHits row env | env >= 10 = row |> List.fold (fn u n -> n + Pr.bi (Bd.alive u)) 0.
 envHits row env | env >= 4 = row |> List.fold (fn u n -> n + Pr.bi (Bd.alive u and Bd.uSoft u == 1)) 0.
 envHits row env = 0.
-envFlash fx seed n | n == 0 = fx.
+envFlash : _ -> _ -> (n : Int | measure n) -> _ .
+envFlash fx seed n | n <= 0 = fx.
 envFlash fx seed n =
   x = ((n * 1973 + seed * 337) % 10400 + 10400) % 10400 - 5200;
   y = 400 + ((n * 997 + seed * 191) % 1200 + 1200) % 1200;
@@ -179,6 +195,7 @@ envAll row = row |> List.map (fn u -> if Bd.alive u
     then { u | hp = u.hp - 1, flash = 250 }
     else u).
 # units the ENV took to 0
+collect : unsafe _ -> _ -> _ -> _ -> _ .
 collect m s z c | c > 4 = m.
 collect m s z c =
   u = Bd.slotOf (Bd.sideOf m s) z c;
@@ -190,6 +207,7 @@ trim l n = List.take l n.
 
 # ---- rules: the player's and the AI's actions, applied ------------------------------
 
+callCard : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 callCard m s i z c =
   p = Bd.sideOf m s;
   k = Pr.nth p.hand i (0 - 1);
@@ -199,6 +217,7 @@ callCard m s i z c =
   if k >= 0 and p.stock >= cost and not (Bd.occ p z c) and (z == 1 or z == 2)
     then called m s p i z c cd (Bd.mkU cd down) cost
     else Md.oops m "cannot call {Cd.cName cd} there".
+called : unsafe _ -> _ -> _ -> _ -> _ -> _ -> _ -> _ -> _ -> _ .
 called m s p i z c cd u cost =
   p2 = Bd.setSlot { p | stock = p.stock - cost, hand = Pr.delAt p.hand i } z c { u | born = 0 - 380 };
   m2 = if s == 0 then Bd.setSide { m | gone = (i, 0), called = m.called + 1 } s p2 else Bd.setSide m s p2;

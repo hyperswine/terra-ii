@@ -1,7 +1,5 @@
 # ---- the view: the whole board as a Scene, every frame -----------------------------------
 
-unsafe module.
-
 Mo = use "motion".
 Cd = use "cards".
 Bd = use "board".
@@ -49,10 +47,12 @@ scene m =
   Scene Nil es8 lights (cameraOf m).
 
 # where a unit fell: a dark ellipse that fades over twenty seconds
-markEnts Nil es = es.
-markEnts ((x, z, t) :: r) es =
-  a = 520 - t * 520 / 20000;
-  markEnts r (Ent "sphere" (x, 64, z) 0 (1900, 24, 1500) (40, 35, 35, a) :: es).
+markEnts : (l : List _ | measure l) -> _ -> _ .
+markEnts l es = case l of
+    Nil -> es
+  | (x, z, t) :: r ->
+      a = 520 - t * 520 / 20000;
+      markEnts r (Ent "sphere" (x, 64, z) 0 (1900, 24, 1500) (40, 35, 35, a) :: es).
 
 # the enemy's turn under a veil: a translucent dark sheet over the board,
 # fading in and out over 400 ms, so their moves read as theirs
@@ -63,16 +63,18 @@ veil m es =
 
 # floating damage numbers: white on a dark badge, in front of the target,
 # rising and shrinking over 750 ms
-numEnts Nil es = es.
-numEnts ((x, z, s, t) :: r) es =
-  k = Mo.easeOut (Mo.clampK (t * 1000 / 750));
-  cell = 190 - k / 8;
-  y = 2100 + k * 22 / 10;
-  zz = z + 1500;
-  w = textW s (cell * 9) + 3 * cell;
-  a = 1000 - Mo.easeIn k;
-  es1 = Ent "cube" (x, y - 43 * cell / 10, zz - 60) 0 (w, 8 * cell, 60) (60, 30, 30, a * 85 / 100) :: es;
-  numEnts r (txtC es1 s x (y + cell / 2) zz cell (1000, 980, 900, a)).
+numEnts : (l : List _ | measure l) -> _ -> _ .
+numEnts l es = case l of
+    Nil -> es
+  | (x, z, s, t) :: r ->
+      k = Mo.easeOut (Mo.clampK (t * 1000 / 750));
+      cell = 190 - k / 8;
+      y = 2100 + k * 22 / 10;
+      zz = z + 1500;
+      w = textW s (cell * 9) + 3 * cell;
+      a = 1000 - Mo.easeIn k;
+      es1 = Ent "cube" (x, y - 43 * cell / 10, zz - 60) 0 (w, 8 * cell, 60) (60, 30, 30, a * 85 / 100) :: es;
+      numEnts r (txtC es1 s x (y + cell / 2) zz cell (1000, 980, 900, a)).
 
 # the camera, knocked about while shake > 0 (a hash of the clock, not a
 # random stream: a replayed game shakes the same way)
@@ -102,6 +104,7 @@ cursorRing m es = targetRings m (cursorRingAt m es).
 targetRings m es = case m.sel of
     Md.STarget az ac -> hqRing m ac (ringsGo m ac 1 0 (ringsGo m ac 2 0 es))
   | s -> es.
+ringsGo : _ -> _ -> _ -> (c : Int | measure (4 - c)) -> _ -> _ .
 ringsGo m ac z c es | c > 4 = es.
 ringsGo m ac z c es =
   (x, y, zz) = Bd.posOf 1 z c;
@@ -132,6 +135,7 @@ cursorRingAt m es =
 # tiles, lit by the selection and the valid targets (the cursor is the ring)
 tiles m es = tileRow (tileRow (tileRow (tileRow es m 0 1) m 0 2) m 1 1) m 1 2.
 tileRow es m s z = trGo es m s z 0.
+trGo : _ -> _ -> _ -> _ -> (c : Int | measure (4 - c)) -> _ .
 trGo es m s z c | c > 4 = es.
 trGo es m s z c =
   (x, y, zz) = Bd.posOf s z c;
@@ -178,6 +182,7 @@ hqEnts es m s =
     else es1.
 isTargetHq m = case m.sel of Md.STarget az ac -> True | s -> False.
 
+rowEnts : _ -> _ -> _ -> _ -> (c : Int | measure (4 - c)) -> _ .
 rowEnts es m s z c | c > 4 = es.
 rowEnts es m s z c =
   u = Bd.slotOf (Bd.sideOf m s) z c;
@@ -338,7 +343,8 @@ projOf m es s c tz tc t =
 flash es (x, y, z) t upto size | t < upto = Ent "sphere" (x, y, z) 0 (size, size, size) (1000, 950, 600) :: es.
 flash es p t upto size = es.
 # four rounds 55 ms apart, each crossing in 230 ms; elongated along the aim
-tracers es from to yaw t i | i == 4 = es.
+tracers : _ -> _ -> _ -> _ -> _ -> (i : Int | measure (4 - i)) -> _ .
+tracers es from to yaw t i | i >= 4 = es.
 tracers es from to yaw t i =
   ti = t - i * 55;
   es2 = if ti > 0 and ti < 230
@@ -356,14 +362,19 @@ shell2 es from to t =
   Ent "sphere" (x, y + 500 * k * (1000 - k) / 1000000 - (y - 800) * k / 1000, z) 0 (220, 220, 220) (300, 300, 320) :: es.
 # smoke: grey puffs that rise, grow and fade over 700 ms; a puff with a
 # negative age is still in the barrel
-puffEnts Nil es = es.
-puffEnts ((x, y, z, t) :: r) es | t < 0 = puffEnts r es.
-puffEnts ((x, y, z, t) :: r) es =
-  k = Mo.easeOut (Mo.clampK (t * 1000 / 700));
-  sz = 160 + k * 7 / 10;
-  a = 800 - k * 8 / 10;
-  puffEnts r (Ent "sphere" (x, y + k * 6 / 10, z) 0 (sz, sz, sz) (520, 520, 550, a) :: es).
-fxEnts Nil es = es.
-fxEnts ((x, y, z, t) :: r) es =
-  k = Mo.easeOut (Mo.clampK (t * 1000 / 380));
-  fxEnts r (Ent "cube" (x, y + k * 11 / 10, z) 0 (160 - k / 8, 160 - k / 8, 160 - k / 8) (1000, 850 - k * 38 / 100, 300, 1000 - k * 7 / 10) :: es).
+puffEnts : (l : List _ | measure l) -> _ -> _ .
+puffEnts l es = case l of
+    Nil -> es
+  | (x, y, z, t) :: r ->
+      if t < 0 then puffEnts r es
+      else
+        k = Mo.easeOut (Mo.clampK (t * 1000 / 700));
+        sz = 160 + k * 7 / 10;
+        a = 800 - k * 8 / 10;
+        puffEnts r (Ent "sphere" (x, y + k * 6 / 10, z) 0 (sz, sz, sz) (520, 520, 550, a) :: es).
+fxEnts : (l : List _ | measure l) -> _ -> _ .
+fxEnts l es = case l of
+    Nil -> es
+  | (x, y, z, t) :: r ->
+      k = Mo.easeOut (Mo.clampK (t * 1000 / 380));
+      fxEnts r (Ent "cube" (x, y + k * 11 / 10, z) 0 (160 - k / 8, 160 - k / 8, 160 - k / 8) (1000, 850 - k * 38 / 100, 300, 1000 - k * 7 / 10) :: es).

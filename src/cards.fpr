@@ -1,7 +1,5 @@
 # ---- cards: the two factions and what a card is ----------------------------------------
 
-unsafe module.
-
 Pr = use "prelude".
 
 # Card id name cost atk def gen drain kind soft   kind 0 combat, 1 support,
@@ -96,5 +94,6 @@ closeUp v i last =
 
 facIds 0 = range 0 15.
 facIds f = range 20 35.
+range : (a : Int | measure (b - a)) -> (b : Int) -> List Int .
 range a b | a > b = Nil.
 range a b = a :: range (a + 1) b.

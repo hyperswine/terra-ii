@@ -1,7 +1,5 @@
 # ---- units, sides and the board's geometry ---------------------------------------------
 
-unsafe module.
-
 Pr = use "prelude".
 Cd = use "cards".
 Mo = use "motion".

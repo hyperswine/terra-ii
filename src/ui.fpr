@@ -1,8 +1,6 @@
 # ---- the 2D layer: scene2d over the board ------------------------------------------------
 # A 960 x 600 virtual screen: status bar, unit panel, banner, hand, and the menu screens.
 
-unsafe module.
-
 Pr = use "prelude".
 Mo = use "motion".
 Cd = use "cards".
@@ -116,8 +114,10 @@ pauseTree m =
 menuCard title kids =
   Box [Col, W 340, Pad 20, Gap 8, Round 16, Shadow, Bga Pl.glass, Bord Pl.yellow]
       (centred (lbl 26 Pl.yellow title) :: spacer 6 :: kids).
-menuItems m i Nil = Nil.
-menuItems m i (s :: r) = menuItem (m.menu == i) s :: menuItems m (i + 1) r.
+menuItems : _ -> Int -> (l : List _ | measure l) -> _ .
+menuItems m i l = case l of
+    Nil -> Nil
+  | s :: r -> menuItem (m.menu == i) s :: menuItems m (i + 1) r.
 menuItem True s = Box [Row, Pad 8, Round 8, Bg Pl.chip, Bord Pl.yellow, Center] [lbl 15 Pl.ink s].
 menuItem False s = Box [Row, Pad 8, Round 8, Center] [lbl 15 Pl.inkDim s].
 
@@ -137,8 +137,10 @@ gridOf ids seli =
   Box [Col, Gap 6]
       (Box [Row, Gap 6] (minis (List.take ids 8) 0 seli) ::
        [Box [Row, Gap 6] (minis (List.drop ids 8) 8 seli)]).
-minis Nil i seli = Nil.
-minis (k :: r) i seli = mini (Cd.cardOf k) (i == seli) :: minis r (i + 1) seli.
+minis : (l : List _ | measure l) -> Int -> Int -> _ .
+minis l i seli = case l of
+    Nil -> Nil
+  | k :: r -> mini (Cd.cardOf k) (i == seli) :: minis r (i + 1) seli.
 mini cd sel =
   face = if sel then Pl.paperLit else Pl.paper;
   rim = if sel then Pl.yellow else Pl.edge;
@@ -177,11 +179,14 @@ keysTree m =
               [centred (lbl 12 Pl.inkDim "esc  back")]);
   Box [Col, W uiW, H uiH, Center, Mid] [card].
 keyGroup g name = Box [Col, Grow, Gap 7] (lbl 11 Pl.inkDim name :: keyRows (ofGroup g keymap)).
-keyRows Nil = Nil.
-keyRows ((g, k, what) :: r) = keyLineW 62 k what :: keyRows r.
-ofGroup g Nil = Nil.
-ofGroup g ((gg, k, w) :: r) | gg == g = (gg, k, w) :: ofGroup g r.
-ofGroup g (e :: r) = ofGroup g r.
+keyRows : (l : List _ | measure l) -> _ .
+keyRows l = case l of
+    Nil -> Nil
+  | (g, k, what) :: r -> keyLineW 62 k what :: keyRows r.
+ofGroup : _ -> (l : List _ | measure l) -> _ .
+ofGroup g l = case l of
+    Nil -> Nil
+  | (gg, k, w) :: r -> if gg == g then (gg, k, w) :: ofGroup g r else ofGroup g r.
 
 # the Stats screen: the profile's totals and its recent games
 statsTree m =
@@ -207,17 +212,19 @@ bestStr b = "{b} rounds".
 recentBox m Nil = lbl 13 Pl.inkDim "no game finished yet -- play one through".
 # the list scrolls in place under the wheel; 30 px a row
 recentBox m rs = Box [Col, Gap 4, H 236, Clip, Scroll 0 m.ss] (recentRows rs 0).
-recentRows Nil i = Nil.
-recentRows r i | i == 50 = Nil.
-recentRows (g :: r) i =
-  (won, rounds, hqMe, hqEn, cl, lo, ki, dm) = g;
-  res = if won == 1 then "WIN" else "LOSS";
-  col = if won == 1 then Pl.yellow else Pl.danger;
-  Box [Row, Gap 16, Mid, Pad 5, H 26, Round 6, Bg Pl.chip]
-      (Box [Row, W 48] [lbl 13 col res] ::
-       Box [Row, W 90] [lbl 13 Pl.ink "{rounds} rounds"] ::
-       Box [Row, W 90] [lbl 12 Pl.inkDim "HQ {hqMe} : {hqEn}"] ::
-       [lbl 12 Pl.inkDim "called {cl}   lost {lo}   destroyed {ki}   damage {dm}"]) :: recentRows r (i + 1).
+recentRows : (l : List _ | measure l) -> Int -> _ .
+recentRows l i | i == 50 = Nil.
+recentRows l i = case l of
+    Nil -> Nil
+  | g :: r ->
+      (won, rounds, hqMe, hqEn, cl, lo, ki, dm) = g;
+      res = if won == 1 then "WIN" else "LOSS";
+      col = if won == 1 then Pl.yellow else Pl.danger;
+      Box [Row, Gap 16, Mid, Pad 5, H 26, Round 6, Bg Pl.chip]
+          (Box [Row, W 48] [lbl 13 col res] ::
+           Box [Row, W 90] [lbl 13 Pl.ink "{rounds} rounds"] ::
+           Box [Row, W 90] [lbl 12 Pl.inkDim "HQ {hqMe} : {hqEn}"] ::
+           [lbl 12 Pl.inkDim "called {cl}   lost {lo}   destroyed {ki}   damage {dm}"]) :: recentRows r (i + 1).
 
 topBar m =
   Box [Row, H 46, Pad 8, Gap 14, Mid, Bga Pl.glass]
@@ -344,8 +351,10 @@ handBar m =
   Box [Row, H 184, Pad 10, Gap 10, Center, Clip, Scroll m.hs 0] (cards m m.me.hand 0).
 # the departing card's ghost shrinks in place over 200 ms so the hand
 # closes the gap; the last card, just dealt, grows in over 200 ms
-cards m Nil i = ghost m i Nil.
-cards m (k :: r) i = ghost m i (card m (Cd.cardOf k) i (dealtW m i) :: cards m r (i + 1)).
+cards : _ -> (l : List _ | measure l) -> Int -> _ .
+cards m l i = case l of
+    Nil -> ghost m i Nil
+  | k :: r -> ghost m i (card m (Cd.cardOf k) i (dealtW m i) :: cards m r (i + 1)).
 ghost m i rest =
   (gi, gt) = m.gone;
   if gi == i and gt < 200
