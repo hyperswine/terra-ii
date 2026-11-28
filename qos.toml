@@ -19,4 +19,4 @@ display = "gl"
 disk-mb = 32
 
 [sdk]
-version = "0.4.0"
+version = "0.5.0"
