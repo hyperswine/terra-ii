@@ -2,7 +2,7 @@
 
 C = use "sol/lib/project".
 G = use "../scripts/gui".
-J = use "sol/lib/json".
+J = use "std/jsondoc".
 
 testGame u =
   _ = C.setup Unit;
@@ -30,4 +30,4 @@ testGame u =
     ("checks",J.JArr (List.map J.JStr ["headless game through std/game (disk, no disk, save acknowledgements, late load, tactical hint, real-disk failures)","original 3D title","new game","cursor/card/turn input","PNG snapshots","clean quit"])),
     ("build",J.JStr "qos build and qos run (QOS Portable SDK, qos.toml v2)")]).
 
-> testGame Unit.
+>! testGame Unit.

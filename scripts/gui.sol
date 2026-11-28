@@ -1,9 +1,9 @@
 C = use "sol/lib/project".
 P = use "sol/lib/proc".
-J = use "sol/lib/json".
+J = use "std/jsondoc".
 
 event code value = C.need (Bytes.fromList (List.map (fn n -> 0) (List.range 1 16) +
-  [1,0,code%256,Num.floor (code/256.0),value,0,0,0])).
+  [1,0,code%256,code / 256,value,0,0,0])).
 key fifo code =
   stage = P.spec ["/bin/sh","-c","cat > \"$1\"","keys",fifo];
   PipelineResult status codes out err = C.need (Proc.pipeline (PipelineSpec [stage]
