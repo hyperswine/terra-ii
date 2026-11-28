@@ -2,6 +2,7 @@
 # A 960 x 600 virtual screen: status bar, unit panel, banner, hand, and the menu screens.
 
 Pr = use "prelude".
+L = use "std/list".
 Mo = use "motion".
 Cd = use "cards".
 Bd = use "board".
@@ -124,7 +125,7 @@ menuItem False s = Box [Row, Pad 8, Round 8, Center] [lbl 15 Pl.inkDim s].
 # the Cards screen: both factions as small cards, the cursor's in detail
 cardsTree m =
   (fac, i) = m.ccur;
-  cd = Cd.cardOf (Pr.nth (Cd.facIds fac) i 0);
+  cd = Cd.cardOf (L.getWithDefault 0 i (Cd.facIds fac));
   card = Box [Col, W 920, Pad 18, Gap 8, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
              (Box [Row, Mid] [lbl 30 Pl.yellow "CARDS", grow, lbl 12 Pl.inkDim "arrows  browse      esc  back"] ::
               lbl 11 Pl.blueLight "REPUBLIC VI" ::
@@ -167,7 +168,7 @@ termTree m =
   card = Box [Col, W 760, Pad 20, Gap 10, Round 16, Shadow, Bga Pl.glass, Bord Pl.yellow]
              (Box [Row, Mid] [lbl 26 Pl.yellow "TERMINAL", grow,
                               lbl 12 Pl.inkDim "the model, live -- help lists the commands, esc closes"] ::
-              Box [Col, Gap 3, H 300, Clip] (Pr.rev m.tout Nil |> List.map (fn l -> tE 13 Pl.ink 720 l)) ::
+              Box [Col, Gap 3, H 300, Clip] (L.reverse m.tout |> List.map (fn l -> tE 13 Pl.ink 720 l)) ::
               [Box [Row, Pad 8, Round 8, Bg Pl.chip] [tE 15 Pl.white 720 ("> " + m.tin + caret)]]);
   Box [Col, W uiW, H uiH, Center, Mid] [card].
 
@@ -267,7 +268,7 @@ handCard m = case m.sel of
     Md.SPlace i z -> i
   | Md.SNone -> (if m.zone == 0 and m.cur < List.len m.me.hand then m.cur else 0 - 1)
   | s -> 0 - 1.
-cardPanelOf m i = case Pr.nth m.me.hand i (0 - 1) of
+cardPanelOf m i = case L.getWithDefault (0 - 1) i m.me.hand of
     k -> (if k < 0 then spacer 1 else Box [Col] [cardPanel m (Cd.cardOf k), grow]).
 cardPanel m cd =
   k = Mo.easeOut (Mo.clampK (m.hovT * 1000 / 220));

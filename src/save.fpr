@@ -4,6 +4,7 @@
 unsafe module.
 
 Pr = use "prelude".
+L = use "std/list".
 Bd = use "board".
 Md = use "model".
 Game = use "std/game".
@@ -33,12 +34,12 @@ profEnd p line i n =
   (res, i3) = Core.wordAt line i2 n;
   ws = intsFrom line i3 n;
   won = Core.strEq res "win";
-  rounds = Pr.nth ws 0 0;
+  rounds = L.getWithDefault 0 0 ws;
   best2 = if won and (p.best == 0 or rounds < p.best) then rounds else p.best;
   { p | gone = Int.max 0 (p.gone - 1), won = p.won + Pr.bi won, lost = p.lost + Pr.bi (not won),
         rounds = p.rounds + rounds, best = best2,
-        calls = p.calls + Pr.nth ws 3 0, losses = p.losses + Pr.nth ws 4 0,
-        recent = (Pr.bi won, rounds, Pr.nth ws 1 0, Pr.nth ws 2 0, Pr.nth ws 3 0, Pr.nth ws 4 0, Pr.nth ws 5 0, Pr.nth ws 6 0) :: p.recent }.
+        calls = p.calls + L.getWithDefault 0 3 ws, losses = p.losses + L.getWithDefault 0 4 ws,
+        recent = (Pr.bi won, rounds, L.getWithDefault 0 1 ws, L.getWithDefault 0 2 ws, L.getWithDefault 0 3 ws, L.getWithDefault 0 4 ws, L.getWithDefault 0 5 ws, L.getWithDefault 0 6 ws) :: p.recent }.
 intsFrom line i n | i >= n = Nil.
 intsFrom line i n =
   (w, j) = Core.wordAt line i n;
@@ -79,11 +80,11 @@ loadGame m s =
     then loadGame2 m ls
     else m.
 loadGame2 m ls =
-  g = lineInts (Pr.nth ls 1 "");
-  p0 = sideOfLines (Pr.nth ls 2 "") (Pr.nth ls 3 "") (Pr.nth ls 4 "") (Pr.nth ls 5 "") (Pr.nth ls 6 "");
-  p1 = sideOfLines (Pr.nth ls 7 "") (Pr.nth ls 8 "") (Pr.nth ls 9 "") (Pr.nth ls 10 "") (Pr.nth ls 11 "");
-  { m | me = p0, en = p1, seed = Pr.nth g 0 m.seed, turn = Pr.nth g 1 0, tno = Pr.nth g 2 0, env = Pr.nth g 3 0,
-        called = Pr.nth g 4 0, lostU = Pr.nth g 5 0, kills = Pr.nth g 6 0, dmg = Pr.nth g 7 0, cont = 1 }.
+  g = lineInts (L.getWithDefault "" 1 ls);
+  p0 = sideOfLines (L.getWithDefault "" 2 ls) (L.getWithDefault "" 3 ls) (L.getWithDefault "" 4 ls) (L.getWithDefault "" 5 ls) (L.getWithDefault "" 6 ls);
+  p1 = sideOfLines (L.getWithDefault "" 7 ls) (L.getWithDefault "" 8 ls) (L.getWithDefault "" 9 ls) (L.getWithDefault "" 10 ls) (L.getWithDefault "" 11 ls);
+  { m | me = p0, en = p1, seed = L.getWithDefault m.seed 0 g, turn = L.getWithDefault 0 1 g, tno = L.getWithDefault 0 2 g, env = L.getWithDefault 0 3 g,
+        called = L.getWithDefault 0 4 g, lostU = L.getWithDefault 0 5 g, kills = L.getWithDefault 0 6 g, dmg = L.getWithDefault 0 7 g, cont = 1 }.
 # a line's numbers after its one-letter tag
 lineInts line =
   n = strlen line;
@@ -91,14 +92,14 @@ lineInts line =
   intsFrom line i n.
 sideOfLines sl dl hl fl rl =
   sv = lineInts sl;
-  { hq = Pr.nth sv 0 15, stock = Pr.nth sv 1 0, deck = lineInts dl, hand = lineInts hl,
+  { hq = L.getWithDefault 15 0 sv, stock = L.getWithDefault 0 1 sv, deck = lineInts dl, hand = lineInts hl,
     fwd = unitsOf (lineInts fl) 5, rear = unitsOf (lineInts rl) 5 }.
 unitsOf ns 0 = Nil.
 unitsOf ns k = unitOf ns :: unitsOf (List.drop ns 11) (k - 1).
 unitOf ns =
-  { Bd.noU | id = Pr.nth ns 0 0 - 1, hp = Pr.nth ns 1 0, atk = Pr.nth ns 2 0, mode = Pr.nth ns 3 0, ready = Pr.nth ns 4 0,
-          down = Pr.nth ns 5 0, rdy = Pr.nth ns 6 0, chg = Pr.nth ns 7 0, vet = Pr.nth ns 8 0, age = Pr.nth ns 9 0,
-          ow = Pr.nth ns 10 0, born = 1000 }.
+  { Bd.noU | id = L.getWithDefault 0 0 ns - 1, hp = L.getWithDefault 0 1 ns, atk = L.getWithDefault 0 2 ns, mode = L.getWithDefault 0 3 ns, ready = L.getWithDefault 0 4 ns,
+          down = L.getWithDefault 0 5 ns, rdy = L.getWithDefault 0 6 ns, chg = L.getWithDefault 0 7 ns, vet = L.getWithDefault 0 8 ns, age = L.getWithDefault 0 9 ns,
+          ow = L.getWithDefault 0 10 ns, born = 1000 }.
 
 # the snapshot joins the records; it is announced when the disk confirms it
 saveGame m = { m | recs = (gameUrl, gameRec m) :: m.recs, dirty = 0 }.
@@ -163,7 +164,7 @@ flush toWrote toChecked m =
     Nil -> m1
   | rs -> (if m1.fsOn == 0
       then { m1 | recs = Nil }
-      else queue { m1 | recs = Nil } (Pr.rev rs Nil));
+      else queue { m1 | recs = Nil } (L.reverse rs));
   pump toWrote toChecked m2.
 queue m Nil = m.
 queue m ((url, text) :: rest) =

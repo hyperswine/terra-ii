@@ -1,6 +1,7 @@
 # ---- units, sides and the board's geometry ---------------------------------------------
 
 Pr = use "prelude".
+L = use "std/list".
 Cd = use "cards".
 Mo = use "motion".
 
@@ -28,7 +29,7 @@ rowOf p 1 = p.fwd.
 rowOf p z = p.rear.
 setRow p 1 row = { p | fwd = row }.
 setRow p z row = { p | rear = row }.
-slotOf p z c = Pr.nth (rowOf p z) c noU.
+slotOf p z c = L.getWithDefault noU c (rowOf p z).
 setSlot p z c u = setRow p z (Pr.setAt (rowOf p z) c u).
 occ p z c = alive (slotOf p z c).
 

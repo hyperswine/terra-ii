@@ -4,17 +4,11 @@
 L = use "std/list".
 M = use "std/math".
 
-nth : List a -> Int -> a -> a .
-nth l i d = L.getWithDefault d i l.
-
 setAt : List a -> Int -> a -> List a .
 setAt l i v = L.setAt i v l.
 
 delAt : List a -> Int -> List a .
 delAt l i = L.removeAt i l.
-
-rev : List a -> List a -> List a .
-rev l acc = L.revOnto l acc.
 
 bi : Bool -> Int .
 bi True = 1.

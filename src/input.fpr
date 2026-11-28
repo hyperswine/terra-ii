@@ -7,6 +7,7 @@
 unsafe module.
 
 Pr = use "prelude".
+L = use "std/list".
 Cd = use "cards".
 Bd = use "board".
 Md = use "model".
@@ -156,7 +157,7 @@ zoneStep 2 d | d < 0 = 0.
 zoneStep z d = z.
 
 placeZone m i z d =
-  cd = Cd.cardOf (Pr.nth m.me.hand i 0);
+  cd = Cd.cardOf (L.getWithDefault 0 i m.me.hand);
   z2 = if d > 0 then 1 else 2;
   if z2 == 1 and Cd.cKind cd == 1
     then Md.oops m "support units serve in the rear"
@@ -170,7 +171,7 @@ confirm m = case m.sel of
   | Md.STarget z c -> aim m z c.
 
 pick m | m.zone == 0 =
-  k = Pr.nth m.me.hand (Int.min m.cur (List.len m.me.hand - 1)) (0 - 1);
+  k = L.getWithDefault (0 - 1) (Int.min m.cur (List.len m.me.hand - 1)) m.me.hand;
   if k < 0
     then Md.oops m "no card there"
     else { m | sel = Md.SPlace m.cur (if Cd.cKind (Cd.cardOf k) == 1 then 2 else 1),

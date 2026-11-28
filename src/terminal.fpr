@@ -3,6 +3,7 @@
 unsafe module.
 
 Pr = use "prelude".
+L = use "std/list".
 Cd = use "cards".
 Bd = use "board".
 Md = use "model".
@@ -42,10 +43,10 @@ runTerm m =
   line = m.tin;
   (m2, out) = termRun m (twords line);
   shown = ("> " + line) :: out;
-  { m2 | tin = "", tout = List.take (Pr.rev out Nil + (("> " + line) :: m.tout)) 14,
-         log = Pr.rev (shown |> List.map (fn s -> "term: " + s)) Nil + m2.log }.
+  { m2 | tin = "", tout = List.take (L.reverse out + (("> " + line) :: m.tout)) 14,
+         log = L.reverse (shown |> List.map (fn s -> "term: " + s)) + m2.log }.
 twords s = twGo s 0 (strlen s) Nil.
-twGo s i n acc | i >= n = Pr.rev acc Nil.
+twGo s i n acc | i >= n = L.reverse acc.
 twGo s i n acc =
   (w, j) = Core.wordAt s i n;
   if strlen w == 0 then twGo s j n acc else twGo s j n (w :: acc).
@@ -76,7 +77,7 @@ termHelp =
 sideNo s | eq s "en" = 1.
 sideNo s = 0.
 parts s = ptGo s 0 0 (strlen s) Nil.
-ptGo s st i n acc | i >= n = Pr.rev (substr s st (i - st) :: acc) Nil.
+ptGo s st i n acc | i >= n = L.reverse (substr s st (i - st) :: acc).
 ptGo s st i n acc | charAt s i == 46 = ptGo s (i + 1) (i + 1) n (substr s st (i - st) :: acc).
 ptGo s st i n acc = ptGo s st (i + 1) n acc.
 

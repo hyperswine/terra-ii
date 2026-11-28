@@ -1,6 +1,7 @@
 # ---- the AI (side 1): greedy, positional ------------------------------------------------
 
 Pr = use "prelude".
+L = use "std/list".
 Cd = use "cards".
 Bd = use "board".
 Md = use "model".
@@ -25,18 +26,18 @@ beats l = case l of
     Nil -> Nil
   | a :: r -> a :: Md.ABeat :: beats r.
 aiCalls : unsafe _ -> _ -> _ -> _ -> Int -> _ .
-aiCalls m p i acc n | n == 0 = (Pr.rev acc Nil, p).
+aiCalls m p i acc n | n == 0 = (L.reverse acc, p).
 aiCalls m p i acc n =
   k = bestCard p.hand p.stock 0 (0 - 1) (0 - 1);
   if k < 0
-    then (Pr.rev acc Nil, p)
-    else aiCall m p acc n k (Cd.cardOf (Pr.nth p.hand k 0)).
+    then (L.reverse acc, p)
+    else aiCall m p acc n k (Cd.cardOf (L.getWithDefault 0 k p.hand)).
 aiCall : unsafe _ -> _ -> _ -> Int -> Int -> _ -> _ .
 aiCall m p acc n k cd =
   z = if Cd.cKind cd == 1 then 2 else 1;
   c = freeCol p z;
   if c < 0
-    then (Pr.rev acc Nil, p)
+    then (L.reverse acc, p)
     else aiCalls m (Bd.setSlot { p | stock = p.stock - Cd.cCost cd, hand = Pr.delAt p.hand k } z c (Bd.mkU cd 0))
                      0 (Md.ACall 1 k z c :: acc) (n - 1).
 # index of the dearest affordable card (support preferred when nothing is in the rear)
@@ -62,7 +63,7 @@ fcGo p z l best = case l of
       else fcGo p z r best.
 
 aiActs : _ -> _ -> (c : Int | measure (4 - c)) -> _ -> _ .
-aiActs m p c acc | c > 4 = Pr.rev acc Nil.
+aiActs m p c acc | c > 4 = L.reverse acc.
 aiActs m p c acc =
   u = Bd.slotOf p 1 c;
   ru = Bd.slotOf p 2 c;

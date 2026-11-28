@@ -4,6 +4,7 @@
 # module, or call one that does; everything else here is checked safe.
 
 Pr = use "prelude".
+L = use "std/list".
 Cd = use "cards".
 Bd = use "board".
 Md = use "model".
@@ -210,7 +211,7 @@ trim l n = List.take l n.
 callCard : unsafe _ -> _ -> _ -> _ -> _ -> _ .
 callCard m s i z c =
   p = Bd.sideOf m s;
-  k = Pr.nth p.hand i (0 - 1);
+  k = L.getWithDefault (0 - 1) i p.hand;
   cd = Cd.cardOf k;
   down = Pr.bi (z == 2 and Cd.cKind cd != 1);
   cost = Cd.cCost cd - down;

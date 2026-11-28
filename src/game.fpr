@@ -14,6 +14,7 @@
 Game = use "std/game".
 O = use "std/option".
 Pr = use "prelude".
+L = use "std/list".
 Md = use "model".
 Ac = use "actions".
 Ai = use "ai".
@@ -108,7 +109,7 @@ takeKey m = case m.keys of
 # the transcript, then the cues, oldest first. A cue's variation is the clock
 # plus 37 for every tone before it in this tick: four rifle cracks in a row are
 # four cracks, not one four times.
-spoken m = lines (Pr.rev m.log Nil) + cues m.ms 0 (Pr.rev m.sfx Nil).
+spoken m = lines (L.reverse m.log) + cues m.ms 0 (L.reverse m.sfx).
 lines : (l : List String | measure l) -> _ .
 lines l = case l of
     Nil -> Nil
@@ -122,7 +123,7 @@ cues seed n l = case l of
 tuned : unsafe _ -> _ .
 tuned m = case m.mus of
     Nil -> (m, Nil)
-  | vs -> ({ m | mus = Nil }, volumes (Pr.rev vs Nil)).
+  | vs -> ({ m | mus = Nil }, volumes (L.reverse vs)).
 volumes : unsafe _ -> _ .
 volumes Nil = Nil.
 volumes (v :: r) = Game.music musicFile v :: volumes r.
