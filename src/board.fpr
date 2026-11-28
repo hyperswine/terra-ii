@@ -40,12 +40,12 @@ setSide m 0 p = { m | me = p }.
 setSide m s p = { m | en = p }.
 
 # supply rate: HQ 2 (1 at ENV 7+) + GEN of face-up rear support - DRAIN of everything
-genRow row = row |> List.fold (fn u total -> case alive u and u.down == 0 and uKind u == 1 of
-    True -> Cd.cGen (uCard u) + total
-  | False -> total) 0.
-drainRow row = row |> List.fold (fn u total -> case alive u of
-    True -> Cd.cDrain (uCard u) + total
-  | False -> total) 0.
+genRow row = row |> List.fold (fn u total -> if alive u and u.down == 0 and uKind u == 1
+    then Cd.cGen (uCard u) + total
+    else total) 0.
+drainRow row = row |> List.fold (fn u total -> if alive u
+    then Cd.cDrain (uCard u) + total
+    else total) 0.
 rate m p = hqGen m + genRow p.rear - drainRow p.fwd - drainRow p.rear.
 hqGen m | m.env >= 7 = 1.
 hqGen m = 2.
@@ -72,12 +72,12 @@ tgtPos s z c me = posOf s z c.
 aimAt base s (x, y, z) (tx, ty, tz) =
   base + dirOf s * Mo.atanM (tx - x) (Int.abs (tz - z)).
 # the yaw a unit at column c on side s turns to hit (tz, tc)
-aimYaw m s c tz tc = aimAt (case s == 0 of True -> 0 | False -> 3142) s (posOf s 1 c) (tgtPos (1 - s) tz tc s).
+aimYaw m s c tz tc = aimAt (if s == 0 then 0 else 3142) s (posOf s 1 c) (tgtPos (1 - s) tz tc s).
 # where the shot leaves: the rifle's tip for a soldier, the barrel's for a tank
 muzzle m s c yaw =
   u = slotOf (sideOf m s) 1 c;
   (x, y, z) = posOf s 1 c;
   (fx, fz) = Mo.facing yaw;
-  case uSoft u == 1 of
-    True -> (x + fx * 720 / 1000, 860, z + fz * 720 / 1000)
-  | False -> (x + fx * 2200 / 1000, 1090, z + fz * 2200 / 1000).
+  if uSoft u == 1
+    then (x + fx * 720 / 1000, 860, z + fz * 720 / 1000)
+    else (x + fx * 2200 / 1000, 1090, z + fz * 2200 / 1000).

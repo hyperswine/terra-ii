@@ -57,7 +57,7 @@ uiW = 960.
 uiH = 600.
 ui m =
   (ents, slots) = S2.buildW (uiW, uiH) (uiTree m);
-  all = case m.screen == Md.scrPause of True -> ents + pauseEnts m | False -> ents;
+  all = if m.screen == Md.scrPause then ents + pauseEnts m else ents;
   (all, S2.camAt uiH).
 
 grow = Box [Grow] Nil.
@@ -89,12 +89,12 @@ uiTree m =
       [topBar m, msgLine m, middle m, handBar m].
 # the title: a glass card over the drifting board, the prompt blinking
 titleTree m =
-  blink = case Mo.tri 1200 m.ms > 0 of True -> Pl.ink | False -> Pl.inkDim;
+  blink = if Mo.tri 1200 m.ms > 0 then Pl.ink else Pl.inkDim;
   logo = Box [Col, Pad 30, Gap 10, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
              (centred (lbl 64 Pl.yellow "TERRA II") ::
               centred (lbl 14 Pl.inkDim "a positional card game  |  Republic VI against the Southern Empire") ::
               spacer 10 ::
-              centred (lbl 20 blink (case m.cont == 1 of True -> "ENTER  continue turn {m.tno}      N  new game" | False -> "press ENTER")) ::
+              centred (lbl 20 blink (if m.cont == 1 then "ENTER  continue turn {m.tno}      N  new game" else "press ENTER")) ::
               spacer 4 ::
               [centred (lbl 12 Pl.inkDim "C  cards      K  keys      S  stats      M  music      Q  quit")]);
   Box [Col, W uiW, H uiH]
@@ -105,11 +105,11 @@ pauseEnts m =
   (es, sl) = S2.buildAt (uiW, uiH) (pauseTree m) 40;
   es.
 pauseTree m =
-  card = case m.confirm == 1 of
-    True -> menuCard "RESTART?"
+  card = if m.confirm == 1
+    then menuCard "RESTART?"
               (centred (lbl 14 Pl.ink "Abandon this game and deal a new one?") :: spacer 6 ::
                [centred (lbl 12 Pl.inkDim "enter  yes      esc  no")])
-  | False -> menuCard "PAUSED"
+    else menuCard "PAUSED"
               (menuItems m 0 ["Resume", "Restart", "Cards", "Stats", "Keys", "Quit"] +
                [spacer 4, centred (lbl 12 Pl.inkDim "arrows  enter      esc  resume")]);
   Box [Col, W uiW, H uiH, Center, Mid, Bga (0, 0, 0, 520)] [card].
@@ -128,9 +128,9 @@ cardsTree m =
   card = Box [Col, W 920, Pad 18, Gap 8, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
              (Box [Row, Mid] [lbl 30 Pl.yellow "CARDS", grow, lbl 12 Pl.inkDim "arrows  browse      esc  back"] ::
               lbl 11 Pl.blueLight "REPUBLIC VI" ::
-              gridOf (Cd.facIds 0) (case fac == 0 of True -> i | False -> 0 - 1) ::
+              gridOf (Cd.facIds 0) (if fac == 0 then i else 0 - 1) ::
               lbl 11 Pl.redLight "SOUTHERN EMPIRE" ::
-              gridOf (Cd.facIds 1) (case fac == 1 of True -> i | False -> 0 - 1) ::
+              gridOf (Cd.facIds 1) (if fac == 1 then i else 0 - 1) ::
               [Box [Row, Pad 8, Round 8, Bg Pl.chip, Mid, Gap 16] (detailOf cd)]);
   Box [Col, W uiW, H uiH, Center, Mid] [card].
 gridOf ids seli =
@@ -140,8 +140,8 @@ gridOf ids seli =
 minis Nil i seli = Nil.
 minis (k :: r) i seli = mini (Cd.cardOf k) (i == seli) :: minis r (i + 1) seli.
 mini cd sel =
-  face = case sel of True -> Pl.paperLit | False -> Pl.paper;
-  rim = case sel of True -> Pl.yellow | False -> Pl.edge;
+  face = if sel then Pl.paperLit else Pl.paper;
+  rim = if sel then Pl.yellow else Pl.edge;
   Box [Col, W 104, H 80, Pad 4, Gap 3, Round 8, Bg face, Bord rim]
       (Box [Row, H 26, Pad 4, Round 6, Bg (bandOf cd), Mid, Gap 3]
            [tE 11 Pl.white 62 (Cd.cName cd), grow, costBadge True (Cd.cCost cd)] ::
@@ -161,7 +161,7 @@ kindText cd = "hard: shrugs off ENV, drains supply".
 
 # the terminal: the transcript of the session so far, the line being typed
 termTree m =
-  caret = case Mo.tri 500 m.ms > 0 of True -> "_" | False -> " ";
+  caret = if Mo.tri 500 m.ms > 0 then "_" else " ";
   card = Box [Col, W 760, Pad 20, Gap 10, Round 16, Shadow, Bga Pl.glass, Bord Pl.yellow]
              (Box [Row, Mid] [lbl 26 Pl.yellow "TERMINAL", grow,
                               lbl 12 Pl.inkDim "the model, live -- help lists the commands, esc closes"] ::
@@ -187,9 +187,9 @@ ofGroup g (e :: r) = ofGroup g r.
 statsTree m =
   p = m.prof;
   fin = p.won + p.lost;
-  winRate = case fin > 0 of True -> p.won * 100 / fin | False -> 0;
-  avg = case fin > 0 of True -> p.rounds / fin | False -> 0;
-  saved = case m.fsOn == 1 of True -> "kept on the disk" | False -> "no disk: this session is not kept";
+  winRate = if fin > 0 then p.won * 100 / fin else 0;
+  avg = if fin > 0 then p.rounds / fin else 0;
+  saved = if m.fsOn == 1 then "kept on the disk" else "no disk: this session is not kept";
   card = Box [Col, W 760, Pad 24, Gap 12, Round 18, Shadow, Bga Pl.glass, Bord Pl.yellow]
              (Box [Row, Mid] [lbl 30 Pl.yellow "STATS", grow, lbl 12 Pl.inkDim saved] ::
               Box [Row, Gap 10]
@@ -211,8 +211,8 @@ recentRows Nil i = Nil.
 recentRows r i | i == 50 = Nil.
 recentRows (g :: r) i =
   (won, rounds, hqMe, hqEn, cl, lo, ki, dm) = g;
-  res = case won == 1 of True -> "WIN" | False -> "LOSS";
-  col = case won == 1 of True -> Pl.yellow | False -> Pl.danger;
+  res = if won == 1 then "WIN" else "LOSS";
+  col = if won == 1 then Pl.yellow else Pl.danger;
   Box [Row, Gap 16, Mid, Pad 5, H 26, Round 6, Bg Pl.chip]
       (Box [Row, W 48] [lbl 13 col res] ::
        Box [Row, W 90] [lbl 13 Pl.ink "{rounds} rounds"] ::
@@ -231,7 +231,7 @@ topBar m =
        stat "HQ" Pl.ink "{m.en.hq}" ::
        stat "SUPPLY" Pl.ink "{m.en.stock}" ::
        tag Pl.redDark Pl.redLight "ENEMY" ::
-       [tag (case m.env >= 4 of True -> Pl.yellow | False -> Pl.chip) (case m.env >= 4 of True -> Pl.paper | False -> Pl.ink) "ENV {m.env}"]).
+       [tag (if m.env >= 4 then Pl.yellow else Pl.chip) (if m.env >= 4 then Pl.paper else Pl.ink) "ENV {m.env}"]).
 
 # the supply figure: counts up or down one a tick, amber while it moves
 supplyShown m =
@@ -239,7 +239,7 @@ supplyShown m =
   sv.
 supplyCol m =
   (sv, st) = m.supV;
-  case st < 400 of True -> Pl.yellow | False -> Pl.ink.
+  if st < 400 then Pl.yellow else Pl.ink.
 msgLine m =
   Box [Row, H 30, Pad 4, Center, Mid] [tE 14 (960, 930, 720) 760 m.msg].
 
@@ -247,21 +247,21 @@ middle m =
   Box [Row, Grow, Pad 10]
       [Box [Col, Grow] [grow, bannerBox m, grow], panel m].
 bannerBox m | m.bt > 0 =
-  age = case m.title == 1 of True -> 1000 | False -> Mo.clampK ((900 - m.bt) * 1000 / 260);
-  em = case m.title == 1 of True -> 44 | False -> 16 + Mo.backOut age * 28 / 1000;
+  age = if m.title == 1 then 1000 else Mo.clampK ((900 - m.bt) * 1000 / 260);
+  em = if m.title == 1 then 44 else 16 + Mo.backOut age * 28 / 1000;
   centred (Box [Row, Pad 14, Round 14, Bga Pl.glass] [lbl em Pl.yellow m.banner]).
 bannerBox m = spacer 1.
 
 # the unit panel: whatever the cursor or the selection is on. A card in the
 # hand (under the cursor, or picked up and being placed) gets the card panel.
 panel m = case handCard m of
-    i -> (case i >= 0 of True -> cardPanelOf m i | False -> panelOf m (panelUnit m)).
+    i -> (if i >= 0 then cardPanelOf m i else panelOf m (panelUnit m)).
 handCard m = case m.sel of
     Md.SPlace i z -> i
-  | Md.SNone -> (case m.zone == 0 and m.cur < List.len m.me.hand of True -> m.cur | False -> 0 - 1)
+  | Md.SNone -> (if m.zone == 0 and m.cur < List.len m.me.hand then m.cur else 0 - 1)
   | s -> 0 - 1.
 cardPanelOf m i = case Pr.nth m.me.hand i (0 - 1) of
-    k -> (case k < 0 of True -> spacer 1 | False -> Box [Col] [cardPanel m (Cd.cardOf k), grow]).
+    k -> (if k < 0 then spacer 1 else Box [Col] [cardPanel m (Cd.cardOf k), grow]).
 cardPanel m cd =
   k = Mo.easeOut (Mo.clampK (m.hovT * 1000 / 220));
   afford = m.me.stock >= Cd.cCost cd;
@@ -272,11 +272,11 @@ cardPanel m cd =
        Box [Col, Pad 4, Gap 8]
            [tE 12 Pl.inkDim 226 "{kindName cd}   call {Cd.cCost cd}   drain {Cd.cDrain cd}",
             Box [Row, Gap 8] (cardChips cd),
-            tE 11 (case afford of True -> Pl.inkDim | False -> Pl.danger) 226
-              (case afford of True -> "supply {m.me.stock}: you can call it" | False -> "needs {Cd.cCost cd} supply, you have {m.me.stock}"),
-            (case placing of
-               True -> helpLines [keyLineW 44 "enter" "call it here", keyLineW 44 "esc" "put it back"]
-             | False -> helpLines [keyLineW 44 "enter" "pick it up", keyLineW 44 "esc" "back"])]].
+            tE 11 (if afford then Pl.inkDim else Pl.danger) 226
+              (if afford then "supply {m.me.stock}: you can call it" else "needs {Cd.cCost cd} supply, you have {m.me.stock}"),
+            (if placing
+               then helpLines [keyLineW 44 "enter" "call it here", keyLineW 44 "esc" "put it back"]
+               else helpLines [keyLineW 44 "enter" "pick it up", keyLineW 44 "esc" "back"])]].
 cardChips cd | Cd.cKind cd == 1 = [chipOf "GEN" "+{Cd.cGen cd}", chipOf "DEF" "{Cd.cDef cd}"].
 cardChips cd = [chipOf "ATK" "{Cd.cAtk cd}", chipOf "DEF" "{Cd.cDef cd}"].
 panelOf m (s, z, c) | s < 0 = spacer 1.
@@ -285,20 +285,20 @@ panelUnit m = case m.sel of
     Md.SUnit z c -> (0, z, c)
   | Md.STarget z c -> panelTarget m z c
   | Md.SPlace i z -> (0 - 1, 0, 0)
-  | s -> case m.zone == 0 of
-      True -> (0 - 1, 0, 0)
-    | False -> case Bd.alive (Bd.slotOf m.me m.zone m.cur) of True -> (0, m.zone, m.cur) | False -> (0 - 1, 0, 0).
-panelTarget m az ac = case m.zone == 3 of
-    True -> (0, 1, ac)
-  | False -> case Bd.alive (Bd.slotOf m.en m.zone m.cur) of True -> (1, m.zone, m.cur) | False -> (0, 1, ac).
+  | s -> if m.zone == 0
+      then (0 - 1, 0, 0)
+      else if Bd.alive (Bd.slotOf m.me m.zone m.cur) then (0, m.zone, m.cur) else (0 - 1, 0, 0).
+panelTarget m az ac = if m.zone == 3
+    then (0, 1, ac)
+    else if Bd.alive (Bd.slotOf m.en m.zone m.cur) then (1, m.zone, m.cur) else (0, 1, ac).
 panelFor m s z c u =
   cd = Bd.uCard u;
-  who = case s == 0 of True -> "YOURS" | False -> "ENEMY";
-  mode = case u.down == 1 of
-    True -> "face down"
-  | False -> case u.mode == 1 of True -> "OVERWATCH" | False -> (case u.chg == 1 of True -> "CHARGED" | False -> "attack mode");
+  who = if s == 0 then "YOURS" else "ENEMY";
+  mode = if u.down == 1
+    then "face down"
+    else if u.mode == 1 then "OVERWATCH" else (if u.chg == 1 then "CHARGED" else "attack mode");
   k = Mo.easeOut (Mo.clampK (m.hovT * 1000 / 220));
-  rim = case s == 0 of True -> Pl.blueLight | False -> Pl.redLight;
+  rim = if s == 0 then Pl.blueLight else Pl.redLight;
   Box [Col, W 250, Pad 6, Gap 8, Round 12, Shadow, Bga (mixA Pl.glass Pl.glassLit (1000 - k)), Bord rim]
       [Box [Row, Pad 8, Gap 8, Round 8, Bg (bandOf cd), Mid]
            [tE 17 Pl.white 150 (Cd.cName cd), grow, lbl 11 (mixC Pl.white (bandOf cd) 300) who],
@@ -348,9 +348,9 @@ cards m Nil i = ghost m i Nil.
 cards m (k :: r) i = ghost m i (card m (Cd.cardOf k) i (dealtW m i) :: cards m r (i + 1)).
 ghost m i rest =
   (gi, gt) = m.gone;
-  case gi == i and gt < 200 of
-    True -> stub (Int.max 1 (cardW - Mo.easeOut (gt * 1000 / 200) * cardW / 1000)) :: rest
-  | False -> rest.
+  if gi == i and gt < 200
+    then stub (Int.max 1 (cardW - Mo.easeOut (gt * 1000 / 200) * cardW / 1000)) :: rest
+    else rest.
 dealtW m i | i == List.len m.me.hand - 1 and m.dealt < 200 = Int.max 1 (Mo.easeOut (m.dealt * 1000 / 200) * cardW / 1000).
 dealtW m i = cardW.
 stub w =
@@ -360,9 +360,9 @@ card m cd i w | w < cardW = stub w.
 card m cd i w =
   sel = case m.sel of Md.SNone -> m.zone == 0 and m.cur == i | Md.SPlace j z -> j == i | s -> False;
   afford = m.me.stock >= Cd.cCost cd;
-  k = case sel of True -> Mo.easeOut (Mo.clampK (m.hovT * 1000 / 140)) | False -> 0;
+  k = if sel then Mo.easeOut (Mo.clampK (m.hovT * 1000 / 140)) else 0;
   face = mixC Pl.paper Pl.paperLit k;
-  rim = case sel of True -> mixC Pl.edge Pl.yellow k | False -> Pl.edge;
+  rim = if sel then mixC Pl.edge Pl.yellow k else Pl.edge;
   body = Box [Col, W cardW, H cardH, Pad 5, Gap 6, Round 10, Shadow, Bg face, Bord rim]
              (Box [Row, H 32, Pad 6, Round 7, Bg (bandOf cd), Mid, Gap 4]
                   [tE 13 Pl.white 76 (Cd.cName cd), grow, costBadge afford (Cd.cCost cd)] ::
@@ -372,7 +372,7 @@ card m cd i w =
   lift = 14 - k * 14 / 1000;
   Box [Col, W cardW, H (cardH + 14)] [spacer lift, body].
 costBadge afford cost =
-  Box [Row, W 22, H 22, Round 11, Bg (case afford of True -> Pl.yellow | False -> Pl.danger), Center, Mid]
+  Box [Row, W 22, H 22, Round 11, Bg (if afford then Pl.yellow else Pl.danger), Center, Mid]
       [lbl 12 Pl.paper "{cost}"].
 bigStats cd | Cd.cKind cd == 1 = [figure "+{Cd.cGen cd}" "GEN" Pl.yellow, grow, figure "{Cd.cDef cd}" "DEF" Pl.ink].
 bigStats cd = [figure "{Cd.cAtk cd}" "ATK" Pl.ink, grow, figure "{Cd.cDef cd}" "DEF" Pl.ink].
@@ -399,6 +399,6 @@ ssMax m = Int.max 0 (Int.min 50 (List.len m.prof.recent) * 30 - 236).
 followCard m | m.zone != 0 = m.
 followCard m =
   cx = m.cur * (cardW + 10);
-  hs1 = case cx < m.hs of True -> cx | False -> m.hs;
-  hs2 = case cx + cardW > hs1 + handInner of True -> cx + cardW - handInner | False -> hs1;
+  hs1 = if cx < m.hs then cx else m.hs;
+  hs2 = if cx + cardW > hs1 + handInner then cx + cardW - handInner else hs1;
   { m | hs = Pr.clampTo hs2 (hsMax m) }.

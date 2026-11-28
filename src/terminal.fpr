@@ -21,9 +21,9 @@ termKey m 28 = (runTerm m, Nil).
 termKey m 14 = ({ m | tin = dropLast m.tin }, Nil).
 termKey m k =
   ch = keyChar k;
-  case strlen ch == 0 or strlen m.tin >= 60 of
-    True -> (m, Nil)
-  | False -> ({ m | tin = m.tin + ch }, Nil).
+  if strlen ch == 0 or strlen m.tin >= 60
+    then (m, Nil)
+    else ({ m | tin = m.tin + ch }, Nil).
 dropLast s | strlen s == 0 = s.
 dropLast s = substr s 0 (strlen s - 1).
 keyChar k | k >= 2 and k <= 10 = chr (k + 47).
@@ -48,7 +48,7 @@ twords s = twGo s 0 (strlen s) Nil.
 twGo s i n acc | i >= n = Pr.rev acc Nil.
 twGo s i n acc =
   (w, j) = Core.wordAt s i n;
-  case strlen w == 0 of True -> twGo s j n acc | False -> twGo s j n (w :: acc).
+  if strlen w == 0 then twGo s j n acc else twGo s j n (w :: acc).
 eq a b = Core.strEq a b.
 tnum s = Core.parseDigits s.
 
@@ -125,9 +125,9 @@ setP m (a :: b :: c :: f :: Nil) v | (eq a "me" or eq a "en") and (eq b "fwd" or
   col = tnum c - 1;
   p = Bd.sideOf m s;
   u = Bd.slotOf p z col;
-  case Bd.alive u of
-    False -> (m, ["no unit at {a}.{b}.{c}"])
-  | True -> (Bd.setSide m s (Bd.setSlot p z col (setUnitField u f v)), ["{a}.{b}.{c}.{f} = {v}"]).
+  if Bd.alive u
+    then (Bd.setSide m s (Bd.setSlot p z col (setUnitField u f v)), ["{a}.{b}.{c}.{f} = {v}"])
+    else (m, ["no unit at {a}.{b}.{c}"]).
 setP m p v = (m, ["cannot set that (ls lists the paths)"]).
 unitField u f | eq f "hp" = u.hp.
 unitField u f | eq f "atk" = u.atk.
@@ -152,9 +152,9 @@ handText m s =
   Core.joinWith " " (p.hand |> List.map (fn k -> "{k}:{Cd.cName (Cd.cardOf k)}")).
 rowText m s z =
   p = Bd.sideOf m s;
-  who = case s == 0 of True -> "me" | False -> "en";
-  who + "." + (case z == 1 of True -> "fwd" | False -> "rear") + ": " +
-  Core.joinWith "  " (Bd.rowOf p z |> List.map (fn u -> case Bd.alive u of True -> "{Cd.cName (Bd.uCard u)} {u.atk}/{u.hp}" | False -> "-")).
+  who = if s == 0 then "me" else "en";
+  who + "." + (if z == 1 then "fwd" else "rear") + ": " +
+  Core.joinWith "  " (Bd.rowOf p z |> List.map (fn u -> if Bd.alive u then "{Cd.cName (Bd.uCard u)} {u.atk}/{u.hp}" else "-")).
 dealCmd m s id | strlen (Cd.cName (Cd.cardOf id)) == 1 = (m, ["no card {id}"]).
 dealCmd m s id =
   p = Bd.sideOf m s;

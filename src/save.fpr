@@ -23,18 +23,18 @@ profUrl = "terra2/profile".
 profFold p line =
   n = strlen line;
   (w, i) = Core.wordAt line 0 n;
-  case Core.strEq w "start" of
-    True -> { p | played = p.played + 1, gone = p.gone + 1 }
-  | False -> (case Core.strEq w "end" of
-      True -> profEnd p line i n
-    | False -> p).
+  if Core.strEq w "start"
+    then { p | played = p.played + 1, gone = p.gone + 1 }
+    else (if Core.strEq w "end"
+      then profEnd p line i n
+      else p).
 profEnd p line i n =
   (sd, i2) = Core.wordAt line i n;
   (res, i3) = Core.wordAt line i2 n;
   ws = intsFrom line i3 n;
   won = Core.strEq res "win";
   rounds = Pr.nth ws 0 0;
-  best2 = case won and (p.best == 0 or rounds < p.best) of True -> rounds | False -> p.best;
+  best2 = if won and (p.best == 0 or rounds < p.best) then rounds else p.best;
   { p | gone = Int.max 0 (p.gone - 1), won = p.won + Pr.bi won, lost = p.lost + Pr.bi (not won),
         rounds = p.rounds + rounds, best = best2,
         calls = p.calls + Pr.nth ws 3 0, losses = p.losses + Pr.nth ws 4 0,
@@ -42,15 +42,15 @@ profEnd p line i n =
 intsFrom line i n | i >= n = Nil.
 intsFrom line i n =
   (w, j) = Core.wordAt line i n;
-  case strlen w == 0 of
-    True -> intsFrom line j n
-  | False -> Core.parseDigits w :: intsFrom line j n.
+  if strlen w == 0
+    then intsFrom line j n
+    else Core.parseDigits w :: intsFrom line j n.
 
 # a line for the disk: folded now, written by update's flush
 rec m line = { m | prof = profFold m.prof line, recs = (profUrl, line) :: m.recs }.
 startRec m = rec m "start {m.seed}".
 endRec m won =
-  w = case won of True -> "win" | False -> "loss";
+  w = if won then "win" else "loss";
   m2 = rec m "end {m.seed} {w} {m.tno} {Int.max 0 m.me.hq} {Int.max 0 m.en.hq} {m.called} {m.lostU} {m.kills} {m.dmg}";
   { m2 | recs = (gameUrl, "none") :: m2.recs, dirty = 0 }.
 
@@ -75,9 +75,9 @@ units (u :: r) =
 
 loadGame m s =
   ls = Core.lines s;
-  case List.len ls == 12 of
-    False -> m
-  | True -> loadGame2 m ls.
+  if List.len ls == 12
+    then loadGame2 m ls
+    else m.
 loadGame2 m ls =
   g = lineInts (Pr.nth ls 1 "");
   p0 = sideOfLines (Pr.nth ls 2 "") (Pr.nth ls 3 "") (Pr.nth ls 4 "") (Pr.nth ls 5 "") (Pr.nth ls 6 "");
@@ -129,7 +129,7 @@ gotGame m r | m.fsOn == 0 = (m, Nil).
 gotGame m r | m.title != 1 = (m, Nil).
 gotGame m r =
   m2 = gameOf m r;
-  (m2, case m2.cont == 1 of True -> [Game.log "[terra2] a game is waiting: turn {m2.tno}"] | False -> Nil).
+  (m2, if m2.cont == 1 then [Game.log "[terra2] a game is waiting: turn {m2.tno}"] else Nil).
 gameOf m (Ok s) = loadGame m s.
 gameOf m (Err e) = m.
 profOf (Ok s) = Core.lines s |> List.fold (fn line p -> profFold p line) Md.profEmpty.
@@ -156,18 +156,18 @@ Out = Type (Out id url text note unsure).
 retryTicks = 250.
 
 flush toWrote toChecked m =
-  m1 = case m.dirty == 1 and idleNow m of
-    True -> saveGame m
-  | False -> m;
+  m1 = if m.dirty == 1 and idleNow m
+    then saveGame m
+    else m;
   m2 = case m1.recs of
     Nil -> m1
-  | rs -> (case m1.fsOn == 0 of
-      True -> { m1 | recs = Nil }
-    | False -> queue { m1 | recs = Nil } (Pr.rev rs Nil));
+  | rs -> (if m1.fsOn == 0
+      then { m1 | recs = Nil }
+      else queue { m1 | recs = Nil } (Pr.rev rs Nil));
   pump toWrote toChecked m2.
 queue m Nil = m.
 queue m ((url, text) :: rest) =
-  note = case Core.strEq url gameUrl and not (Core.strEq text "none") of True -> "game saved: turn {m.tno}" | False -> "";
+  note = if Core.strEq url gameUrl and not (Core.strEq text "none") then "game saved: turn {m.tno}" else "";
   queue { m | seq = m.seq + 1, out = m.out + [Out (m.seq + 1) url text note 0] } rest.
 
 # send the head, unless one is in flight or the queue is resting
@@ -175,14 +175,14 @@ pump toWrote toChecked m | m.busy == 1 or m.wait > 0 = (m, Nil).
 pump toWrote toChecked m = case m.out of
     Nil -> (m, Nil)
   | Out id url text note unsure :: rest ->
-      (case unsure == 1 of
-        True -> ({ m | busy = 1 }, [Game.attempt (Game.replay profUrl) (toChecked id)])
-      | False -> ({ m | busy = 1 }, [Game.attempt (Game.append url (text + "\n")) (toWrote id)])).
+      (if unsure == 1
+        then ({ m | busy = 1 }, [Game.attempt (Game.replay profUrl) (toChecked id)])
+        else ({ m | busy = 1 }, [Game.attempt (Game.append url (text + "\n")) (toWrote id)])).
 
 wrote toWrote toChecked m id r = case m.out of
-    Out hid url text note unsure :: rest -> (case hid == id of
-        False -> (m, Nil)
-      | True -> written toWrote toChecked m rest url text note r)
+    Out hid url text note unsure :: rest -> (if hid == id
+        then written toWrote toChecked m rest url text note r
+        else (m, Nil))
   | Nil -> (m, Nil).
 written toWrote toChecked m rest url text note (Ok r) =
   (m2, cs) = pump toWrote toChecked { m | out = rest, busy = 0 };
@@ -198,9 +198,9 @@ unsureHead (Out id url text note unsure :: rest) = Out id url text note 1 :: res
 unsureHead Nil = Nil.
 
 checked toWrote toChecked m id r = case m.out of
-    Out hid url text note unsure :: rest -> (case hid == id and unsure == 1 of
-        False -> (m, Nil)
-      | True -> reconciled toWrote toChecked m rest url text note r)
+    Out hid url text note unsure :: rest -> (if hid == id and unsure == 1
+        then reconciled toWrote toChecked m rest url text note r
+        else (m, Nil))
   | Nil -> (m, Nil).
 reconciled toWrote toChecked m rest url text note (Ok s) | Core.strEq (lastLine (Core.lines s) "") text =
   (m2, cs) = pump toWrote toChecked { m | out = rest, busy = 0 };
@@ -212,7 +212,7 @@ reconciled toWrote toChecked m rest url text note (Ok s) =
 reconciled toWrote toChecked m rest url text note (Err why) =
   ({ m | busy = 0, wait = retryTicks }, [Game.log "[terra2] save still unconfirmed: {why}"]).
 lastLine Nil last = last.
-lastLine (l :: r) last = case strlen l == 0 of True -> lastLine r last | False -> lastLine r l.
+lastLine (l :: r) last = if strlen l == 0 then lastLine r last else lastLine r l.
 # the tick counts the rest down
 rested m | m.wait > 0 = { m | wait = m.wait - 1 }.
 rested m = m.

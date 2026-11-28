@@ -18,7 +18,7 @@ startAct m a = case a of
     Md.ABeat -> pause m 260
   | Md.AStart s ->
     m2 = Ru.startTurn m s;
-    m3 = case s == 1 of True -> { m2 | queue = AI.aiPlan m2 + [Md.AEnd 1] } | False -> m2;
+    m3 = if s == 1 then { m2 | queue = AI.aiPlan m2 + [Md.AEnd 1] } else m2;
     pause { m3 | dirty = Pr.bi (s == 0) } 900
   | Md.AEnd s -> pause (Ru.endTurn m s) 500
   | Md.ACall s i z c -> flyCard (Ru.callCard m s i z c) m s i z c
@@ -39,35 +39,35 @@ flyCard m2 m s i z c = { m2 | anim = Md.An 5 s i 0 z c 0 1 }.
 overwatch m s c =
   p = Bd.sideOf m s;
   u = Bd.slotOf p 1 c;
-  case Ru.canAct u and Bd.uKind u != 2 of
-    False -> Md.oops m "that unit cannot change mode now"
-  | True -> Bd.setSide (Md.cue { m | msg = (case u.mode == 0 of True -> "overwatch" | False -> "back to attack mode") } Sfx.toggle)
-                    s (Bd.setSlot p 1 c { u | mode = 1 - u.mode, ready = 0 }).
+  if Ru.canAct u and Bd.uKind u != 2
+    then Bd.setSide (Md.cue { m | msg = (if u.mode == 0 then "overwatch" else "back to attack mode") } Sfx.toggle)
+                    s (Bd.setSlot p 1 c { u | mode = 1 - u.mode, ready = 0 })
+    else Md.oops m "that unit cannot change mode now".
 charge m s c =
   p = Bd.sideOf m s;
   u = Bd.slotOf p 1 c;
-  case Ru.canAct u and Bd.uKind u == 2 of
-    False -> Md.oops m "only ready artillery charges"
-  | True -> Bd.setSide (Md.cue { m | msg = "charging" } Sfx.charge) s (Bd.setSlot p 1 c { u | chg = 1, ready = 0 }).
+  if Ru.canAct u and Bd.uKind u == 2
+    then Bd.setSide (Md.cue { m | msg = "charging" } Sfx.charge) s (Bd.setSlot p 1 c { u | chg = 1, ready = 0 })
+    else Md.oops m "only ready artillery charges".
 slide m s fz fc tz tc =
   p = Bd.sideOf m s;
   u = Bd.slotOf p fz fc;
   ok = Ru.canAct u and Bd.uKind u != 1 and not (Bd.occ p tz tc);
-  case ok of
-    False -> Md.oops m "cannot move that unit"
-  | True -> Md.cue { m | anim = Md.An 3 s fz fc tz tc 0 0, msg = (case tz == 2 of True -> "retreat" | False -> "advance") } Sfx.move.
+  if ok
+    then Md.cue { m | anim = Md.An 3 s fz fc tz tc 0 0, msg = (if tz == 2 then "retreat" else "advance") } Sfx.move
+    else Md.oops m "cannot move that unit".
 attack m s c tz tc =
   u = Bd.slotOf (Bd.sideOf m s) 1 c;
   ok = Ru.canAct u and u.mode == 0 and Bd.uKind u != 2 and Ru.targetOk m s c tz tc;
-  case ok of
-    False -> Md.oops m "no valid attack there"
-  | True -> Md.cue (Md.note { m | anim = Md.An 1 s 1 c tz tc 0 0,
+  if ok
+    then Md.cue (Md.note { m | anim = Md.An 1 s 1 c tz tc 0 0,
                                   puffs = smoke m.puffs
                                                 (Bd.muzzle m s c (Bd.aimYaw m s c tz tc))
-                                                (case Bd.uSoft u == 1 of True -> 3 | False -> 6)
-                                                (case Bd.uSoft u == 1 of True -> 0 | False -> 60) }
+                                                (if Bd.uSoft u == 1 then 3 else 6)
+                                                (if Bd.uSoft u == 1 then 0 else 60) }
                                                 "{Md.sideName s}: {Cd.cName (Bd.uCard u)} attacks {tgtName tz (tc + 1)}")
-                                                (case Bd.uSoft u == 1 of True -> Sfx.rifle | False -> Sfx.cannon).
+                                                (if Bd.uSoft u == 1 then Sfx.rifle else Sfx.cannon)
+    else Md.oops m "no valid attack there".
 # muzzle smoke: n puffs around a point, held (negative age) until the shot
 smoke ps pos n delay | n == 0 = ps.
 smoke ps pos n delay =
@@ -78,19 +78,19 @@ tgtName z c = "{Md.zoneName z} {c}".
 fire m s c tz tc =
   u = Bd.slotOf (Bd.sideOf m s) 1 c;
   ok = Ru.canAct u and u.chg == 1 and Bd.uKind u == 2 and Ru.fireOk m s tz tc;
-  case ok of
-    False -> Md.oops m "artillery must be charged, and aimed at the rear or the HQ"
-  | True -> Md.cue (Md.note { m | anim = Md.An 2 s 1 c tz tc 0 0 } "{Md.sideName s}: artillery fires at {tgtName tz (tc + 1)}") Sfx.shot.
+  if ok
+    then Md.cue (Md.note { m | anim = Md.An 2 s 1 c tz tc 0 0 } "{Md.sideName s}: artillery fires at {tgtName tz (tc + 1)}") Sfx.shot
+    else Md.oops m "artillery must be charged, and aimed at the rear or the HQ".
 
 advance m dt =
   Md.An kind s fz fc tz tc t done = m.anim;
   t2 = t + dt;
-  m1 = case done == 0 and t2 >= Md.durOf kind / 2 of
-    True -> { (midpoint m kind s fz fc tz tc) | anim = Md.An kind s fz fc tz tc t2 1, snap = m.snap + m.auto * Pr.bi (kind < 4) }
-  | False -> { m | anim = Md.An kind s fz fc tz tc t2 done };
-  case t2 >= (case kind == 4 of True -> 0 | False -> Md.durOf kind) of
-    True -> finishAn m1 kind s fz fc tz tc
-  | False -> m1.
+  m1 = if done == 0 and t2 >= Md.durOf kind / 2
+    then { (midpoint m kind s fz fc tz tc) | anim = Md.An kind s fz fc tz tc t2 1, snap = m.snap + m.auto * Pr.bi (kind < 4) }
+    else { m | anim = Md.An kind s fz fc tz tc t2 done };
+  if t2 >= (if kind == 4 then 0 else Md.durOf kind)
+    then finishAn m1 kind s fz fc tz tc
+    else m1.
 midpoint m 1 s fz fc tz tc = Ru.resolveAttack m s fc tz tc.
 midpoint m 2 s fz fc tz tc =
   m2 = Ru.spend m s 1 fc;
@@ -107,7 +107,7 @@ finishAn m k s fz fc tz tc = { m | anim = Md.noAn }.
 ageAll m dt =
   m1 = chase m dt;
   { m1 | me = ageSide m.me dt, en = ageSide m.en dt, bt = Int.max 0 (m.bt - dt), fx = ageFx m.fx dt Nil,
-         marks = ageMarks m.marks dt Nil, vt = (case m.turn == 1 of True -> Int.min 400 (m.vt + dt) | False -> Int.max 0 (m.vt - dt)),
+         marks = ageMarks m.marks dt Nil, vt = (if m.turn == 1 then Int.min 400 (m.vt + dt) else Int.max 0 (m.vt - dt)),
          gone = ageGone m.gone dt, dealt = Int.min 1000 (m.dealt + dt),
          nums = ageNums m.nums dt Nil, shake = Int.max 0 (m.shake - dt), puffs = agePuffs m.puffs dt Nil }.
 agePuffs Nil dt acc = acc.
@@ -122,15 +122,15 @@ chase m dt =
   hov2 = (m.zone, m.cur);
   same = hov2 == m.hov;
   (sv, st) = m.supV;
-  sv2 = case sv < m.me.stock of True -> sv + 1 | False -> (case sv > m.me.stock of True -> sv - 1 | False -> sv);
-  m2 = { m | ring = ring2, hov = hov2, hovT = (case same of True -> Int.min 2000 (m.hovT + dt) | False -> 0),
-             supV = (sv2, case sv2 == m.me.stock of True -> Int.min 1000 (st + dt) | False -> 0) };
-  case same of True -> { m2 | hs = Pr.clampTo m2.hs (Ui.hsMax m2) } | False -> Ui.followCard m2.
+  sv2 = if sv < m.me.stock then sv + 1 else (if sv > m.me.stock then sv - 1 else sv);
+  m2 = { m | ring = ring2, hov = hov2, hovT = (if same then Int.min 2000 (m.hovT + dt) else 0),
+             supV = (sv2, if sv2 == m.me.stock then Int.min 1000 (st + dt) else 0) };
+  if same then { m2 | hs = Pr.clampTo m2.hs (Ui.hsMax m2) } else Ui.followCard m2.
 ringTarget m = case m.sel of
-    Md.STarget az ac -> (case m.zone == 3 of
-        True -> (0, Bd.zOf 1 3 + 700)
-      | False -> (Bd.colX m.cur, Bd.zOf 1 m.zone))
-  | s -> (case m.zone == 0 of True -> m.ring | False -> (Bd.colX m.cur, Bd.zOf 0 m.zone)).
+    Md.STarget az ac -> (if m.zone == 3
+        then (0, Bd.zOf 1 3 + 700)
+        else (Bd.colX m.cur, Bd.zOf 1 m.zone))
+  | s -> (if m.zone == 0 then m.ring else (Bd.colX m.cur, Bd.zOf 0 m.zone)).
 ageGone (i, t) dt = (i, Int.min 1000 (t + dt)).
 ageMarks Nil dt acc = acc.
 ageMarks ((x, z, t) :: r) dt acc | t + dt > 20000 = ageMarks r dt acc.

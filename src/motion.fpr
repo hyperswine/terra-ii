@@ -18,9 +18,9 @@ clampK k = Int.max 0 (Int.min 1000 k).
 # ---- integer trig (milli-radians): Bhaskara's sine; atanM is below ------
 sinM x =
   r = ((x % 6283) + 6283) % 6283;
-  case r > 3142 of
-    True -> 0 - sinM (r - 3142)
-  | False -> 16 * r * (3142 - r) * 1000 / (5 * 3142 * 3142 - 4 * r * (3142 - r)).
+  if r > 3142
+    then 0 - sinM (r - 3142)
+    else 16 * r * (3142 - r) * 1000 / (5 * 3142 * 3142 - 4 * r * (3142 - r)).
 cosM x = sinM (x + 1571).
 # the direction a yaw faces, milli: yaw 0 is -z (the player's front)
 facing yaw = (0 - sinM yaw, 0 - cosM yaw).
@@ -35,20 +35,20 @@ tri p t =
   1000 - Int.abs (x - 1000).
 sweep p t =
   x = ((t % p) + p) % p * 1000 / p;
-  case x < 350 of
-    True -> 0 - 1000
-  | False -> case x < 500 of
-      True -> (x - 425) * 1000 / 75
-    | False -> case x < 850 of
-        True -> 1000
-      | False -> (925 - x) * 1000 / 75.
+  if x < 350
+    then 0 - 1000
+    else if x < 500
+      then (x - 425) * 1000 / 75
+      else if x < 850
+        then 1000
+        else (925 - x) * 1000 / 75.
 phaseOf s z c = (s * 7 + z * 3 + c * 11) * 397.
 
 # atan(dx/dz) in milli-radians, signed like dx; |r| <= 1 by the polynomial
 # r(pi/4 + 0.273(1 - |r|)), beyond it by pi/2 - atan(dz/dx)
-atanM dx dz | dz == 0 = case dx > 0 of True -> 1571 | False -> (case dx < 0 of True -> 0 - 1571 | False -> 0).
-atanM dx dz | Int.abs dx > dz = case dx > 0 of True -> 1571 - atanM dz (Int.abs dx) | False -> 0 - 1571 + atanM dz (Int.abs dx).
+atanM dx dz | dz == 0 = if dx > 0 then 1571 else (if dx < 0 then 0 - 1571 else 0).
+atanM dx dz | Int.abs dx > dz = if dx > 0 then 1571 - atanM dz (Int.abs dx) else 0 - 1571 + atanM dz (Int.abs dx).
 atanM dx dz =
   r = Int.abs dx * 1000 / dz;
   a = r * (785 + 273 * (1000 - r) / 1000) / 1000;
-  case dx < 0 of True -> 0 - a | False -> a.
+  if dx < 0 then 0 - a else a.

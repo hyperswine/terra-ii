@@ -105,9 +105,9 @@ targetRings m es = case m.sel of
 ringsGo m ac z c es | c > 4 = es.
 ringsGo m ac z c es =
   (x, y, zz) = Bd.posOf 1 z c;
-  es2 = case aimOk m ac z c and not (m.zone == z and m.cur == c) of
-    True -> ring es x zz 2000 2400 (breathe m Pl.danger (600, 300, 280)) 84
-  | False -> es;
+  es2 = if aimOk m ac z c and not (m.zone == z and m.cur == c)
+    then ring es x zz 2000 2400 (breathe m Pl.danger (600, 300, 280)) 84
+    else es;
   ringsGo m ac z (c + 1) es2.
 hqRing m ac es | aimOk m ac 3 0 and m.zone != 3 =
   (x, y, z) = Bd.hqPos 1;
@@ -122,7 +122,7 @@ cursorRingAt m es =
   (x, z) = m.ring;
   side = case m.sel of Md.STarget az ac -> 1 | s -> 0;
   pulse = 700 + (Mo.tri 900 m.ms + 1000) * 3 / 20;
-  col = case side == 1 of True -> (1000, pulse * 4 / 10, 300) | False -> (1000, pulse * 86 / 100, 300);
+  col = if side == 1 then (1000, pulse * 4 / 10, 300) else (1000, pulse * 86 / 100, 300);
   h = 95;
   Ent "cube" (x, h, z - 1250) 0 (2140, 70, 60) col ::
   Ent "cube" (x, h, z + 1250) 0 (2140, 70, 60) col ::
@@ -167,23 +167,23 @@ hqEnts es m s =
   p = Bd.sideOf m s;
   (x, y, z) = Bd.hqPos s;
   col = Pl.hqCol s;
-  hl = case s == 1 and m.zone == 3 and isTargetHq m of True -> breathe m (1000, 520, 420) col | False -> col;
+  hl = if s == 1 and m.zone == 3 and isTargetHq m then breathe m (1000, 520, 420) col else col;
   d = Bd.dirOf s;
-  hy = case s == 0 of True -> 0 | False -> 3142;
+  hy = if s == 0 then 0 else 3142;
   es1 = Ent "hq" (x, y, z) hy (1000, 1000, 1000) hl ::
         Ent "hq_fence" (x, y, z) hy (1000, 1000, 1000) (620, 660, 720) ::
         Ent "hq_dish" (x + 1350 * d, 1080, z - 700 * d) (m.ms / 60 % 6284) (1000, 1000, 1000) (950, 950, 950) :: es;
-  case s == 1 of
-    True -> txtC es1 "HQ {p.hq}" x 3400 (z + 750) 95 Pl.white
-  | False -> es1.
+  if s == 1
+    then txtC es1 "HQ {p.hq}" x 3400 (z + 750) 95 Pl.white
+    else es1.
 isTargetHq m = case m.sel of Md.STarget az ac -> True | s -> False.
 
 rowEnts es m s z c | c > 4 = es.
 rowEnts es m s z c =
   u = Bd.slotOf (Bd.sideOf m s) z c;
-  es2 = case u.id >= 0 of
-    True -> unitEnts es m s z c u
-  | False -> es;
+  es2 = if u.id >= 0
+    then unitEnts es m s z c u
+    else es;
   rowEnts es2 m s z (c + 1).
 
 # where a unit is drawn: its slot, plus the animation's offset if it is
@@ -191,21 +191,21 @@ rowEnts es m s z c =
 unitPos m s z c =
   Md.An kind as fz fc tz tc t done = m.anim;
   (x, y, zz) = Bd.posOf s z c;
-  case as == s and fz == z and fc == c and kind == 3 of
-    True -> lunge kind t (x, y, zz) (Bd.tgtPos (1 - s) tz tc s)
-  | False -> case as == s and fz == z and fc == c and kind == 1 of
-      True -> recoil s t (x, y, zz)
-    | False -> (x, y, zz).
+  if as == s and fz == z and fc == c and kind == 3
+    then lunge kind t (x, y, zz) (Bd.tgtPos (1 - s) tz tc s)
+    else if as == s and fz == z and fc == c and kind == 1
+      then recoil s t (x, y, zz)
+      else (x, y, zz).
 # an attacker fires from where it stands; a tank rocks back 90 milli from
 # the shot at 60 ms and settles by 300
 recoil s t (x, y, zz) =
-  k = case t < 60 of True -> 0 | False -> Mo.easeOut (Mo.clampK ((300 - t) * 1000 / 240)) * 90 / 1000;
+  k = if t < 60 then 0 else Mo.easeOut (Mo.clampK ((300 - t) * 1000 / 240)) * 90 / 1000;
   (x, y, zz - Bd.dirOf s * k).
 
 # kind 1: out to 70% of the way at the midpoint and back; kind 3: all the way
 lunge 1 t from to =
   d = Md.durOf 1;
-  k = case t * 2 < d of True -> t * 2000 / d | False -> Int.max 0 ((d - t) * 2000 / d);
+  k = if t * 2 < d then t * 2000 / d else Int.max 0 ((d - t) * 2000 / d);
   lerp from to (Mo.easeOut (Mo.clampK k) * 7 / 10).
 lunge k t from to = lerp from to (Mo.easeInOut (Mo.clampK (t * 1000 / Md.durOf 3))).
 lerp (ax, ay, az) (bx, by, bz) k = (ax + (bx - ax) * k / 1000, ay + (by - ay) * k / 1000, az + (bz - az) * k / 1000).
@@ -214,22 +214,22 @@ lerp (ax, ay, az) (bx, by, bz) k = (ax + (bx - ax) * k / 1000, ay + (by - ay) * 
 unitEnts es m s z c u | u.born < 0 = es.
 unitEnts es m s z c u =
   (x, y, zz) = unitPos m s z c;
-  k = case u.dead == 1 of True -> Int.max 50 (1000 - Mo.easeIn (u.dt * 1000 / 420)) | False -> 150 + Mo.backOut (Int.min 1000 (u.born * 1000 / 340)) * 850 / 1000;
-  bob = case s == 0 and (isCursor m z c or isSelected m z c) of True -> 120 - Int.abs ((m.ms % 800) - 400) * 3 / 10 | False -> 0;
-  lift = (case u.born < 340 of True -> (1000 - Mo.easeOut (u.born * 1000 / 340)) * 12 / 10 | False -> 0) + bob;
-  col = case u.flash > 0 of True -> fade Pl.white 1000 | False -> (case u.dead == 1 of True -> fade (unitCol s u) (1000 - Mo.easeIn (Mo.clampK (u.dt * 1000 / 420))) | False -> fade (unitCol s u) 1000);
+  k = if u.dead == 1 then Int.max 50 (1000 - Mo.easeIn (u.dt * 1000 / 420)) else 150 + Mo.backOut (Int.min 1000 (u.born * 1000 / 340)) * 850 / 1000;
+  bob = if s == 0 and (isCursor m z c or isSelected m z c) then 120 - Int.abs ((m.ms % 800) - 400) * 3 / 10 else 0;
+  lift = (if u.born < 340 then (1000 - Mo.easeOut (u.born * 1000 / 340)) * 12 / 10 else 0) + bob;
+  col = if u.flash > 0 then fade Pl.white 1000 else (if u.dead == 1 then fade (unitCol s u) (1000 - Mo.easeIn (Mo.clampK (u.dt * 1000 / 420))) else fade (unitCol s u) 1000);
   d = Bd.dirOf s;
-  es1 = case u.down == 1 of
-    True -> Ent "cube" (x, 80, zz) 0 (1700, 120, 2200) (150, 150, 180) ::
+  es1 = if u.down == 1
+    then Ent "cube" (x, 80, zz) 0 (1700, 120, 2200) (150, 150, 180) ::
             txtC es "?" x 700 (zz + 600) 90 (600, 600, 700)
-  | False -> (case u.id == 15 of
-      True -> fuelDump es x (y + lift) zz d k col
-    | False -> solids es (Bd.uKind u) (Bd.uSoft u) x (y + lift) zz d k col (accent s u) (turretYaw m s z c x zz) m.ms (Mo.phaseOf s z c));
+    else (if u.id == 15
+      then fuelDump es x (y + lift) zz d k col
+      else solids es (Bd.uKind u) (Bd.uSoft u) x (y + lift) zz d k col (accent s u) (turretYaw m s z c x zz) m.ms (Mo.phaseOf s z c));
   es2 = Ent "sphere" (x, 60, zz) 0 (1500 * k / 1000, 30, 1500 * k / 1000) Pl.shadow :: es1;
   hot = s == 0 and (isCursor m z c or isSelected m z c);
-  case u.down == 1 of
-    True -> es2
-  | False -> labelEnts es2 u x zz hot.
+  if u.down == 1
+    then es2
+    else labelEnts es2 u x zz hot.
 unitCol s u | Bd.uKind u == 1 = Pl.supCol s.
 unitCol s u = Pl.sideCol s.
 accent s u | Bd.uSoft u == 0 and Bd.uKind u == 0 = lighter (Pl.sideCol s).
@@ -243,16 +243,16 @@ fade (r, g, b) a = (r, g, b, a).
 # scans, two sweeps of different periods summed so it never quite repeats
 turretYaw m s z c x zz =
   Md.An kind as fz fc tz tc t done = m.anim;
-  base = case s == 0 of True -> 0 | False -> 3142;
+  base = if s == 0 then 0 else 3142;
   ph = Mo.phaseOf s z c;
   idle = Mo.sweep 4700 (m.ms + ph) * 260 / 1000 + Mo.tri 3100 (m.ms + ph * 2) * 90 / 1000;
-  case as == s and fz == z and fc == c and (kind == 1 or kind == 2) of
-    False -> base + idle
-  | True -> Bd.aimAt base s (Bd.posOf s z c) (Bd.tgtPos (1 - s) tz tc s).
+  if as == s and fz == z and fc == c and (kind == 1 or kind == 2)
+    then Bd.aimAt base s (Bd.posOf s z c) (Bd.tgtPos (1 - s) tz tc s)
+    else base + idle.
 
 # each kind: a few primitives placed relative to the slot, scaled by k/1000
 solids es 1 soft x y z d k col acc ty ms ph =
-  hy = case d < 0 of True -> 0 | False -> 3142;
+  hy = if d < 0 then 0 else 3142;
   bob = (Mo.tri 140 (ms + ph) + 1000) * 8 / 2000;
   Ent "truck" (x, y + bob, z) hy (k, k, k) col ::
   Ent "truck_kit" (x, y, z) hy (k, k, k) Pl.dark ::
@@ -261,7 +261,7 @@ solids es 2 soft x y z d k col acc ty ms ph =
   Ent "cube" (x, y + 300 * k / 1000, z) 0 (1300 * k / 1000, 550 * k / 1000, 900 * k / 1000) col ::
   Ent "cube" (x, y + 800 * k / 1000, z + d * 500 * k / 1000) 0 (240 * k / 1000, 240 * k / 1000, 1700 * k / 1000) acc :: es.
 solids es kind 1 x y z d k col acc ty ms ph =
-  hy = case d < 0 of True -> 0 | False -> 3142;
+  hy = if d < 0 then 0 else 3142;
   sc = k * 13 / 10;
   sway = Mo.tri 3400 (ms + ph);                      # weight, side to side
   turn = Mo.sweep 6100 (ms + ph * 3);                # squaring up, now and then
@@ -281,38 +281,38 @@ fuelDump es x y z d k col =
   Ent "fuel_barrel" (x, y, z - d * 330 * k / 1000) 1100 (b, b, b) Pl.khaki :: es.
 # heavy: the CoScad tank (models/tank), hull + turret, 1 model unit = 1000
 solids es kind soft x y z d k col acc ty ms ph =
-  hy = case d < 0 of True -> 0 | False -> 3142;
+  hy = if d < 0 then 0 else 3142;
   sc = k * 115 / 100;
   Ent "tank_hull" (x, y, z) hy (sc, sc, sc) col ::
   Ent "tank_turret" (x, y + 750 * sc / 1000, z) ty (sc, sc, sc) acc :: es.
 
 labelEnts es u x z hot | u.dead == 1 = es.
 labelEnts es u x z hot =
-  s = case Bd.uKind u == 1 of True -> "+{Cd.cGen (Bd.uCard u)} {u.hp}" | False -> "{u.atk}/{u.hp}";
-  badge = case u.mode == 1 of True -> " OW" | False -> (case u.chg == 1 of True -> " CHG" | False -> "");
-  vet = case u.vet > 0 of True -> " *{u.vet}" | False -> "";
-  col = case hot of True -> Pl.white | False -> (case u.ready == 1 of True -> Pl.yellow | False -> (800, 800, 800));
-  txtC es "{s}{badge}{vet}" x 2750 (z - 300) (case hot of True -> 80 | False -> 70) col.
+  s = if Bd.uKind u == 1 then "+{Cd.cGen (Bd.uCard u)} {u.hp}" else "{u.atk}/{u.hp}";
+  badge = if u.mode == 1 then " OW" else (if u.chg == 1 then " CHG" else "");
+  vet = if u.vet > 0 then " *{u.vet}" else "";
+  col = if hot then Pl.white else (if u.ready == 1 then Pl.yellow else (800, 800, 800));
+  txtC es "{s}{badge}{vet}" x 2750 (z - 300) (if hot then 80 else 70) col.
 
 # an artillery or ambush shell in flight (kind 2), or the summon's card (kind 5)
 shotEnts m es =
   Md.An kind s fz fc tz tc t done = m.anim;
-  case kind == 2 of
-    True -> shell es (Bd.posOf s 1 fc) (Bd.tgtPos (1 - s) tz tc s) t
-  | False -> case kind == 5 of
-      True -> cardFlight es m s fz tz tc t
-    | False -> es.
+  if kind == 2
+    then shell es (Bd.posOf s 1 fc) (Bd.tgtPos (1 - s) tz tc s) t
+    else if kind == 5
+      then cardFlight es m s fz tz tc t
+      else es.
 cardFlight es m s i z c t =
   k = Mo.easeInOut (Mo.clampK (t * 1000 / 380));
   side = Bd.sideOf m s;
   n = List.len side.hand + 1;
-  from = case s == 0 of
-    True -> ((i * 2 - (n - 1)) * 950, 900, 11500)
-  | False -> (0, 2600, 0 - 12500);
+  from = if s == 0
+    then ((i * 2 - (n - 1)) * 950, 900, 11500)
+    else (0, 2600, 0 - 12500);
   (x, y, zz) = lerp from (Bd.posOf s z c) k;
   arc = 1800 * k * (1000 - k) / 1000000;
   sc = 1000 - k * 55 / 100;
-  yaw = case s == 0 of True -> 0 | False -> 3142;
+  yaw = if s == 0 then 0 else 3142;
   Ent "cube" (x, y + arc, zz) (yaw + k * 3 / 10) (1750 * sc / 1000, 60, 2300 * sc / 1000) (Pl.sideLight s) ::
   Ent "cube" (x, y + arc + 40, zz) (yaw + k * 3 / 10) (1500 * sc / 1000, 40, 2000 * sc / 1000) (Pl.paperLit) :: es.
 shell es from to t =
@@ -324,26 +324,26 @@ shell es from to t =
 # shell from the barrel, with a muzzle flash; both land at the midpoint
 projEnts m es =
   Md.An kind s fz fc tz tc t done = m.anim;
-  case kind == 1 of
-    False -> es
-  | True -> projOf m es s fc tz tc t.
+  if kind == 1
+    then projOf m es s fc tz tc t
+    else es.
 projOf m es s c tz tc t =
   u = Bd.slotOf (Bd.sideOf m s) 1 c;
   yaw = Bd.aimYaw m s c tz tc;
   from = Bd.muzzle m s c yaw;
   to = Bd.tgtPos (1 - s) tz tc s;
-  case Bd.uSoft u == 1 of
-    True -> flash (tracers es from to yaw t 0) from t 90 260
-  | False -> flash (shell2 es from to t) from t 80 420.
+  if Bd.uSoft u == 1
+    then flash (tracers es from to yaw t 0) from t 90 260
+    else flash (shell2 es from to t) from t 80 420.
 flash es (x, y, z) t upto size | t < upto = Ent "sphere" (x, y, z) 0 (size, size, size) (1000, 950, 600) :: es.
 flash es p t upto size = es.
 # four rounds 55 ms apart, each crossing in 230 ms; elongated along the aim
 tracers es from to yaw t i | i == 4 = es.
 tracers es from to yaw t i =
   ti = t - i * 55;
-  es2 = case ti > 0 and ti < 230 of
-    True -> tracer es from to yaw (ti * 1000 / 230)
-  | False -> es;
+  es2 = if ti > 0 and ti < 230
+    then tracer es from to yaw (ti * 1000 / 230)
+    else es;
   tracers es2 from to yaw t (i + 1).
 tracer es from to yaw k =
   (x, y, z) = lerp from to k;

@@ -24,24 +24,24 @@ beats (a :: r) = a :: Md.ABeat :: beats r.
 aiCalls m p i acc n | n == 0 = (Pr.rev acc Nil, p).
 aiCalls m p i acc n =
   k = bestCard p.hand p.stock 0 (0 - 1) (0 - 1);
-  case k < 0 of
-    True -> (Pr.rev acc Nil, p)
-  | False -> aiCall m p acc n k (Cd.cardOf (Pr.nth p.hand k 0)).
+  if k < 0
+    then (Pr.rev acc Nil, p)
+    else aiCall m p acc n k (Cd.cardOf (Pr.nth p.hand k 0)).
 aiCall m p acc n k cd =
-  z = case Cd.cKind cd == 1 of True -> 2 | False -> 1;
+  z = if Cd.cKind cd == 1 then 2 else 1;
   c = freeCol p z;
-  case c < 0 of
-    True -> (Pr.rev acc Nil, p)
-  | False -> aiCalls m (Bd.setSlot { p | stock = p.stock - Cd.cCost cd, hand = Pr.delAt p.hand k } z c (Bd.mkU cd 0))
+  if c < 0
+    then (Pr.rev acc Nil, p)
+    else aiCalls m (Bd.setSlot { p | stock = p.stock - Cd.cCost cd, hand = Pr.delAt p.hand k } z c (Bd.mkU cd 0))
                      0 (Md.ACall 1 k z c :: acc) (n - 1).
 # index of the dearest affordable card (support preferred when nothing is in the rear)
 bestCard Nil stock i best bcost = best.
 bestCard (k :: r) stock i best bcost =
   co = Cd.cCost (Cd.cardOf k);
   worth = co + 2 * Cd.cGen (Cd.cardOf k);
-  case co <= stock and worth > bcost of
-    True -> bestCard r stock (i + 1) i worth
-  | False -> bestCard r stock (i + 1) best bcost.
+  if co <= stock and worth > bcost
+    then bestCard r stock (i + 1) i worth
+    else bestCard r stock (i + 1) best bcost.
 # a free column for zone z: forward slots in front of a rear unit first,
 # rear slots behind a forward unit first, centre outward
 freeCol p z = fcGo p z [2, 1, 3, 0, 4] (0 - 1).
@@ -55,18 +55,18 @@ aiActs m p c acc | c > 4 = Pr.rev acc Nil.
 aiActs m p c acc =
   u = Bd.slotOf p 1 c;
   ru = Bd.slotOf p 2 c;
-  acc2 = case Ru.canAct ru and Bd.uKind ru != 1 and not (Bd.occ p 1 c) of
-    True -> Md.AAdvance 1 c :: acc
-  | False -> acc;
-  case Ru.canAct u and u.mode == 0 of
-    True -> aiActs m p (c + 1) (aiUnit m p c u :: acc2)
-  | False -> aiActs m p (c + 1) acc2.
+  acc2 = if Ru.canAct ru and Bd.uKind ru != 1 and not (Bd.occ p 1 c)
+    then Md.AAdvance 1 c :: acc
+    else acc;
+  if Ru.canAct u and u.mode == 0
+    then aiActs m p (c + 1) (aiUnit m p c u :: acc2)
+    else aiActs m p (c + 1) acc2.
 aiUnit m p c u | Bd.uKind u == 2 = aiArt m c u.
 aiUnit m p c u =
   o = m.me;
-  case Ru.targetOk m 1 c 3 c of
-    True -> Md.AAttack 1 1 c 3 c
-  | False -> aiPick m c (bestIn m c 2) (bestIn m c 1).
+  if Ru.targetOk m 1 c 3 c
+    then Md.AAttack 1 1 c 3 c
+    else aiPick m c (bestIn m c 2) (bestIn m c 1).
 aiPick m c rc fc | rc >= 0 = Md.AAttack 1 1 c 2 rc.
 aiPick m c rc fc | fc >= 0 = Md.AAttack 1 1 c 1 fc.
 aiPick m c rc fc = Md.AOver 1 c.
@@ -75,15 +75,15 @@ bestIn m c tz = biGo m c tz (Int.max 0 (c - 1)) (Int.min 4 (c + 1)) (0 - 1) 999.
 biGo m c tz k hi best bhp | k > hi = best.
 biGo m c tz k hi best bhp =
   u = Bd.slotOf m.me tz k;
-  case Ru.targetOk m 1 c tz k and u.hp < bhp of
-    True -> biGo m c tz (k + 1) hi k u.hp
-  | False -> biGo m c tz (k + 1) hi best bhp.
+  if Ru.targetOk m 1 c tz k and u.hp < bhp
+    then biGo m c tz (k + 1) hi k u.hp
+    else biGo m c tz (k + 1) hi best bhp.
 aiArt m c u | u.chg == 0 = Md.ACharge 1 c.
 aiArt m c u =
   rc = richest m.me.rear 0 (0 - 1) (0 - 1);
-  case rc < 0 of
-    True -> Md.AFire 1 c 3 0
-  | False -> Md.AFire 1 c 2 rc.
+  if rc < 0
+    then Md.AFire 1 c 3 0
+    else Md.AFire 1 c 2 rc.
 richest Nil i best bg = best.
 richest (u :: r) i best bg | Bd.alive u and Cd.cGen (Bd.uCard u) > bg = richest r (i + 1) i (Cd.cGen (Bd.uCard u)).
 richest (u :: r) i best bg = richest r (i + 1) best bg.
@@ -106,15 +106,15 @@ hintChunk n ((s, l) :: more) best lbl =
 
 hintCands m z c =
   u = Bd.slotOf m.me z c;
-  case Ru.canAct u of
-    False -> Nil
-  | True -> (case z == 2 of
-      True -> (case Bd.uKind u != 1 and not (Bd.occ m.me 1 c) of
-          True -> [(45, "advance to front (V)")]
-        | False -> Nil)
-    | False -> (case Bd.uKind u == 2 of
-        True -> hintArt m c u
-      | False -> hintFwd m c u)).
+  if Ru.canAct u
+    then (if z == 2
+      then (if Bd.uKind u != 1 and not (Bd.occ m.me 1 c)
+          then [(45, "advance to front (V)")]
+          else Nil)
+      else (if Bd.uKind u == 2
+        then hintArt m c u
+        else hintFwd m c u))
+    else Nil.
 
 hintArt m c u | u.chg == 0 = [(50, "charge artillery (C)")].
 hintArt m c u =
@@ -124,36 +124,36 @@ hintArt m c u =
 
 hintFireCands m u tc acc | tc > 4 = acc.
 hintFireCands m u tc acc =
-  acc2 = case Ru.fireOk m 0 2 tc of
-    False -> acc
-  | True ->
+  acc2 = if Ru.fireOk m 0 2 tc
+    then
       eu = Bd.slotOf m.en 2 tc;
       sc = 60 + Cd.cGen (Bd.uCard eu) * 25 + (if eu.hp <= u.atk then 40 else 0);
-      (sc, "fire at rear {tc + 1} ({Cd.cName (Bd.uCard eu)}) (F)") :: acc;
+      (sc, "fire at rear {tc + 1} ({Cd.cName (Bd.uCard eu)}) (F)") :: acc
+    else acc;
   hintFireCands m u (tc + 1) acc2.
 
 hintFwd m c u =
   base = (if u.mode == 0 then [(25, "overwatch (O)")] else Nil) +
          (if not (Bd.occ m.me 2 c) then [(10, "retreat to rear (R)")] else Nil);
-  case u.mode == 0 of
-    False -> base
-  | True -> hintAtkCands m c u (Int.max 0 (c - 1)) (Int.min 4 (c + 1)) base.
+  if u.mode == 0
+    then hintAtkCands m c u (Int.max 0 (c - 1)) (Int.min 4 (c + 1)) base
+    else base.
 
 hintAtkCands m c u tc hi acc | tc > hi = acc.
 hintAtkCands m c u tc hi acc =
-  a1 = case Ru.targetOk m 0 c 3 tc of
-    False -> acc
-  | True -> (100 + u.atk * 4 + (if m.en.hq <= u.atk then 500 else 0), "attack enemy HQ (A)") :: acc;
-  a2 = case Ru.targetOk m 0 c 2 tc of
-    False -> a1
-  | True ->
+  a1 = if Ru.targetOk m 0 c 3 tc
+    then (100 + u.atk * 4 + (if m.en.hq <= u.atk then 500 else 0), "attack enemy HQ (A)") :: acc
+    else acc;
+  a2 = if Ru.targetOk m 0 c 2 tc
+    then
       eu2 = Bd.slotOf m.en 2 tc;
       sc2 = 70 + Cd.cGen (Bd.uCard eu2) * 20 + (if eu2.hp <= u.atk then 45 else 0);
-      (sc2, "attack rear {tc + 1} ({Cd.cName (Bd.uCard eu2)}) (A)") :: a1;
-  a3 = case Ru.targetOk m 0 c 1 tc of
-    False -> a2
-  | True ->
+      (sc2, "attack rear {tc + 1} ({Cd.cName (Bd.uCard eu2)}) (A)") :: a1
+    else a1;
+  a3 = if Ru.targetOk m 0 c 1 tc
+    then
       eu1 = Bd.slotOf m.en 1 tc;
       sc1 = 40 + eu1.atk * 5 + (if eu1.hp <= u.atk then 45 else 0);
-      (sc1, "attack fwd {tc + 1} ({Cd.cName (Bd.uCard eu1)}) (A)") :: a2;
+      (sc1, "attack fwd {tc + 1} ({Cd.cName (Bd.uCard eu1)}) (A)") :: a2
+    else a2;
   hintAtkCands m c u (tc + 1) hi a3.

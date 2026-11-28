@@ -30,13 +30,13 @@ key m 25 = ({ m | snap = m.snap + 1 }, Nil).
 key m 59 = ({ m | snap = m.snap + 1 }, Nil).
 key m 50 =
   on = 1 - m.music;
-  (Md.tune { m | music = on, msg = (case on == 1 of True -> "music on" | False -> "music off") } (on * volNow { m | music = on }), Nil).
+  (Md.tune { m | music = on, msg = (if on == 1 then "music on" else "music off") } (on * volNow { m | music = on }), Nil).
 # the Keys and Stats screens: esc, enter, K or S return
 key m k | m.screen == Md.scrCards = cardsKey m k.
 key m k | m.screen == Md.scrKeys or m.screen == Md.scrStats =
-  case k == 1 or k == 28 or k == 37 or k == 31 of
-    True -> (Md.cue (Md.goBack m) Sfx.cancel, Nil)
-  | False -> (m, Nil).
+  if k == 1 or k == 28 or k == 37 or k == 31
+    then (Md.cue (Md.goBack m) Sfx.cancel, Nil)
+    else (m, Nil).
 # K, S and C from the title, the pause menu and game over
 key m 37 | m.screen != Md.scrPlay = (Md.cue (Md.show m Md.scrKeys) Sfx.pick, Nil).
 key m 31 | m.screen != Md.scrPlay = (Md.cue (Md.show m Md.scrStats) Sfx.pick, Nil).
@@ -137,7 +137,7 @@ cancel m = case m.sel of
   | s -> { m | sel = Md.SNone, msg = "" }.
 
 curMax m = case m.sel of
-    Md.SNone -> (case m.zone == 0 of True -> List.len m.me.hand - 1 | False -> 4)
+    Md.SNone -> (if m.zone == 0 then List.len m.me.hand - 1 else 4)
   | Md.SCard i -> List.len m.me.hand - 1
   | s -> 4.
 moveCur m c = { m | cur = Int.max 0 (Int.min (curMax m) c) }.
@@ -157,10 +157,10 @@ zoneStep z d = z.
 
 placeZone m i z d =
   cd = Cd.cardOf (Pr.nth m.me.hand i 0);
-  z2 = case d > 0 of True -> 1 | False -> 2;
-  case z2 == 1 and Cd.cKind cd == 1 of
-    True -> Md.oops m "support units serve in the rear"
-  | False -> { m | sel = Md.SPlace i z2, zone = z2 }.
+  z2 = if d > 0 then 1 else 2;
+  if z2 == 1 and Cd.cKind cd == 1
+    then Md.oops m "support units serve in the rear"
+    else { m | sel = Md.SPlace i z2, zone = z2 }.
 
 confirm m = case m.sel of
     Md.SNone -> Md.cue (pick m) Sfx.pick
@@ -171,16 +171,16 @@ confirm m = case m.sel of
 
 pick m | m.zone == 0 =
   k = Pr.nth m.me.hand (Int.min m.cur (List.len m.me.hand - 1)) (0 - 1);
-  case k < 0 of
-    True -> Md.oops m "no card there"
-  | False -> { m | sel = Md.SPlace m.cur (case Cd.cKind (Cd.cardOf k) == 1 of True -> 2 | False -> 1),
-                   zone = (case Cd.cKind (Cd.cardOf k) == 1 of True -> 2 | False -> 1), cur = 2,
+  if k < 0
+    then Md.oops m "no card there"
+    else { m | sel = Md.SPlace m.cur (if Cd.cKind (Cd.cardOf k) == 1 then 2 else 1),
+                   zone = (if Cd.cKind (Cd.cardOf k) == 1 then 2 else 1), cur = 2,
                    msg = "place {Cd.cName (Cd.cardOf k)}: arrows, enter (up/down: forward or rear)" }.
 pick m =
   u = Bd.slotOf m.me m.zone m.cur;
-  case Bd.alive u of
-    False -> Md.oops m "empty slot"
-  | True -> { m | sel = Md.SUnit m.zone m.cur, msg = unitHelp m.zone u }.
+  if Bd.alive u
+    then { m | sel = Md.SUnit m.zone m.cur, msg = unitHelp m.zone u }
+    else Md.oops m "empty slot".
 
 # unit help text: returns a string describing the available actions for a unit
 unitHelp 2 u = "rear: V advance to the front".
@@ -204,9 +204,9 @@ unitAct m z c k = Md.oops m "not that, here".
 # aiming at a target: called when the player selects a target for an attack or fire action
 aim m 1 c =
   u = Bd.slotOf m.me 1 c;
-  case Bd.uKind u == 2 of
-    True -> { m | queue = [Md.AFire 0 c m.zone m.cur], sel = Md.SNone, zone = 1, cur = c }
-  | False -> { m | queue = [Md.AAttack 0 1 c m.zone m.cur], sel = Md.SNone, zone = 1, cur = c }.
+  if Bd.uKind u == 2
+    then { m | queue = [Md.AFire 0 c m.zone m.cur], sel = Md.SNone, zone = 1, cur = c }
+    else { m | queue = [Md.AAttack 0 1 c m.zone m.cur], sel = Md.SNone, zone = 1, cur = c }.
 aim m z c = { m | sel = Md.SNone }.
 
 # buffered; a live window also sends kind-1 chars (negative codes): ignored
