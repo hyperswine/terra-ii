@@ -64,16 +64,16 @@ rowKey row = row |> List.map (fn u -> (u.dead, u.hp, u.atk, u.ready, u.mode, u.c
 
 syncHint m (GotHint rev res) m3 = (m3, Nil).
 syncHint m msg m3 | sameHintInput m m3 = (m3, Nil).
-syncHint m msg m3 = case hintActive m3 of
-    True -> (case m3.sel of
+syncHint m msg m3 =
+  if hintActive m3 then
+    (case m3.sel of
         Md.SUnit z c ->
           r = m3.hintRev + 1;
           ({ m3 | hintRev = r, hint = "" }, [Game.latest "hint" r (Ai.hintJob m3 z c) GotHint])
       | s -> (m3, Nil))
-  | False ->
-      if hintActive m or m3.hint != "" then
-        ({ m3 | hintRev = m3.hintRev + 1, hint = "" }, [Game.cancel "hint"])
-      else (m3, Nil).
+  else if hintActive m or m3.hint != "" then
+    ({ m3 | hintRev = m3.hintRev + 1, hint = "" }, [Game.cancel "hint"])
+  else (m3, Nil).
 
 # ---- the tick ----------------------------------------------------------------------------
 # The rules and the input handlers queue their words (m.log) and their cues
@@ -86,9 +86,7 @@ tick m | Md.frozen m =
 tick m =
   m1 = Ac.ageAll { m | ms = m.ms + tickMs, log = Nil, sfx = Nil } tickMs;
   Md.An kind s fz fc tz tc t done = m1.anim;
-  (m2, cs) = case kind != 0 of
-    True -> (Ac.advance m1 tickMs, Nil)
-  | False -> idle m1;
+  (m2, cs) = if kind != 0 then (Ac.advance m1 tickMs, Nil) else idle m1;
   (m2, spoken m2 + cs).
 idle m = case m.queue of
     a :: r -> (Ac.startAct { m | queue = r } a, Nil)
