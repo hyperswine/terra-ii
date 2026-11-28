@@ -1,32 +1,34 @@
 # ---- prelude: the small list and integer helpers -------------------------------------
 # Kept out of the game: index math, list surgery and the LCG the shuffle draws from.
 
-unsafe module.
+L = use "std/list".
+M = use "std/math".
 
-nth : (l : List a | measure l) -> Int -> a -> a .
-nth l i d = case l of
-    Nil -> d
-  | x :: r -> case i == 0 of True -> x | False -> nth r (i - 1) d.
+nth : List a -> Int -> a -> a .
+nth l i d = L.getWithDefault d i l.
 
-setAt : (l : List a | measure l) -> Int -> a -> List a .
-setAt l i v = case l of
-    Nil -> Nil
-  | x :: r -> case i == 0 of True -> v :: r | False -> x :: setAt r (i - 1) v.
+setAt : List a -> Int -> a -> List a .
+setAt l i v = L.setAt i v l.
 
-delAt : (l : List a | measure l) -> Int -> List a .
-delAt l i = case l of
-    Nil -> Nil
-  | x :: r -> case i == 0 of True -> r | False -> x :: delAt r (i - 1).
+delAt : List a -> Int -> List a .
+delAt l i = L.removeAt i l.
 
-rev l acc = l |> List.fold (fn x xs -> x :: xs) acc.
+rev : List a -> List a -> List a .
+rev l acc = L.revOnto l acc.
 
+bi : Bool -> Int .
 bi True = 1.
 bi False = 0.
 
+rnd : Int -> Int .
 rnd s = (s * 1103515245 + 12345) % 2147483648.
 
-split l 0 acc = (rev acc Nil, l).
-split Nil n acc = (rev acc Nil, Nil).
-split (x :: r) n acc = split r (n - 1) (x :: acc).
+split : (l : List a | measure l) -> Int -> List a -> (List a, List a) .
+split l n acc =
+  if n == 0 then (L.reverse acc, l)
+  else case l of
+    Nil -> (L.reverse acc, Nil)
+  | x :: r -> split r (n - 1) (x :: acc).
 
-clampTo v hi = Int.max 0 (Int.min hi v).
+clampTo : Int -> Int -> Int .
+clampTo v hi = M.clamp 0 hi v.
